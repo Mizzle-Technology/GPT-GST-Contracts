@@ -1,6 +1,6 @@
-## Foundry
+## GPT/GST Contracts
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+This repository includes smart contracts for the GPT/GST token ecosystem, covering functionalities for token minting, sales, liquidity rewards, price calculation, and vault management. Each contract integrates KYC checks, transaction authorization, and regulatory compliance features to ensure secure, efficient, and compliant operations.
 
 Foundry consists of:
 
