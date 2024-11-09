@@ -2,6 +2,7 @@
 pragma solidity ^0.8.28;
 
 import "@openzeppelin/token/ERC20/IERC20.sol";
+import "@openzeppelin/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/access/AccessControl.sol";
 import "@openzeppelin/utils/ReentrancyGuard.sol";
 import "@openzeppelin/utils/cryptography/MessageHashUtils.sol";
@@ -17,6 +18,9 @@ import "@openzeppelin/utils/cryptography/ECDSA.sol";
  *      SALES_MANAGER_ROLE: Sales and round management
  */
 contract SalesContract is AccessControl, ReentrancyGuard {
+    // Use SafeERC20 for all IERC20 tokens
+    using SafeERC20 for IERC20;
+
     // === State Variables ===
 
     // Enumerations
@@ -35,6 +39,9 @@ contract SalesContract is AccessControl, ReentrancyGuard {
     IERC20 public usdcToken;
     GoldPackToken public gptToken;
     AggregatorV3Interface internal goldPriceFeed;
+
+    // Mapping of accepted tokens to their aggregator addresses (for price feeds)
+    mapping(address => AggregatorV3Interface) public acceptedTokens;
 
     // Sales management
     SaleStage public currentStage;
@@ -77,7 +84,7 @@ contract SalesContract is AccessControl, ReentrancyGuard {
     string public pauseReason;
 
     // Events
-    event TokensPurchased(address indexed buyer, uint256 amount, uint256 usdcSpent);
+    event TokensPurchased(address indexed buyer, uint256 amount, uint256 tokenSpent, address indexed paymentToken);
     event RoundCreated(uint256 indexed roundId, uint256 maxTokens, uint256 startTime, uint256 endTime);
     event RoundActivated(uint256 indexed roundId);
     event RoundDeactivated(uint256 indexed roundId);
@@ -112,8 +119,8 @@ contract SalesContract is AccessControl, ReentrancyGuard {
         require(_trustedSigner != address(0), "Invalid signer address");
 
         // Initialize roles
-        _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
-        _setupRole(ADMIN_ROLE, msg.sender);
+        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(ADMIN_ROLE, msg.sender);
         _setRoleAdmin(SALES_MANAGER_ROLE, ADMIN_ROLE);
 
         // Initialize state variables
@@ -194,13 +201,14 @@ contract SalesContract is AccessControl, ReentrancyGuard {
      * @notice Allows a whitelisted address to make a purchase during the presale stage.
      * @dev This function can only be called when the contract is not paused and the current stage is PreSale.
      * @param _amount The amount of tokens to purchase.
-     * @require The current stage must be PreSale.
-     * @require The caller must be a whitelisted address.
+     * @param _paymentToken The address of the payment token.
+     * require The current stage must be PreSale.
+     * require The caller must be a whitelisted address.
      */
-    function presalePurchase(uint256 _amount) external nonReentrant whenNotPaused {
+    function presalePurchase(uint256 _amount, address _paymentToken) external nonReentrant whenNotPaused {
         require(currentStage == SaleStage.PreSale, "Presale not active");
         require(whitelistedAddresses[msg.sender], "Not whitelisted");
-        _processPurchase(_amount);
+        _processPurchase(_amount, _paymentToken);
     }
 
     /**
@@ -210,22 +218,25 @@ contract SalesContract is AccessControl, ReentrancyGuard {
      * @param _nonce A unique number to prevent replay attacks.
      * @param _expiry The timestamp until which the signature is valid.
      * @param _signature The signature to verify the purchase authorization.
-     * @require The current stage must be PublicSale.
-     * @require The provided nonce must match the stored nonce for the caller.
-     * @require The current timestamp must be less than or equal to the provided expiry timestamp.
-     * @require The provided signature must be valid.
+     * @param _paymentToken The address of the payment token.
+     * require The current stage must be PublicSale.
+     * require The provided nonce must match the stored nonce for the caller.
+     * require The current timestamp must be less than or equal to the provided expiry timestamp.
+     * require The provided signature must be valid.
      */
-    function authorizePurchase(uint256 _amount, uint256 _nonce, uint256 _expiry, bytes memory _signature)
-        external
-        nonReentrant
-        whenNotPaused
-    {
+    function authorizePurchase(
+        uint256 _amount,
+        uint256 _nonce,
+        uint256 _expiry,
+        bytes memory _signature,
+        address _paymentToken
+    ) external nonReentrant whenNotPaused {
         require(currentStage == SaleStage.PublicSale, "Public sale not active");
         require(_nonce == nonces[msg.sender], "Invalid nonce");
         require(block.timestamp <= _expiry, "Signature expired");
         require(verifySignature(msg.sender, _amount, _nonce, _expiry, _signature), "Invalid signature");
 
-        _processPurchase(_amount);
+        _processPurchase(_amount, _paymentToken);
         nonces[msg.sender]++;
     }
 
@@ -251,11 +262,11 @@ contract SalesContract is AccessControl, ReentrancyGuard {
      * @dev This function can only be called by an account with the ADMIN_ROLE.
      *      The withdrawal must be queued and the timelock must have expired.
      * @param amount The amount of USDC tokens to withdraw.
-     * @require The withdrawal must have been queued.
-     * @require The timelock must have expired.
-     * @require The contract must have sufficient USDC balance.
-     * @require The USDC transfer must succeed.
-     * @emit WithdrawalExecuted Emitted when the withdrawal is successfully executed.
+     * require The withdrawal must have been queued.
+     * require The timelock must have expired.
+     * require The contract must have sufficient USDC balance.
+     * require The USDC transfer must succeed.
+     * emit WithdrawalExecuted Emitted when the withdrawal is successfully executed.
      */
     function executeWithdrawal(uint256 amount) external onlyRole(ADMIN_ROLE) {
         bytes32 hash = keccak256(abi.encode("withdraw", amount));
@@ -287,66 +298,88 @@ contract SalesContract is AccessControl, ReentrancyGuard {
         require(usdcToken.transfer(msg.sender, amount), "Transfer failed");
     }
 
+    /**
+     * @notice Add a new token to the list of accepted payment tokens.
+     * @dev Only callable by accounts with the ADMIN_ROLE.
+     * @param tokenAddress The address of the ERC20 token contract.
+     * @param priceFeedAddress The address of the Chainlink price feed contract for the token.
+     */
+    function addAcceptedToken(address tokenAddress, address priceFeedAddress) external onlyRole(ADMIN_ROLE) {
+        require(tokenAddress != address(0), "Invalid token address");
+        require(priceFeedAddress != address(0), "Invalid price feed address");
+        acceptedTokens[tokenAddress] = AggregatorV3Interface(priceFeedAddress);
+    }
+
+    /**
+     * @notice Remove a token from the list of accepted payment tokens.
+     * @dev Only callable by accounts with the ADMIN_ROLE.
+     * @param tokenAddress The address of the ERC20 token contract.
+     */
+    function removeAcceptedToken(address tokenAddress) external onlyRole(ADMIN_ROLE) {
+        require(acceptedTokens[tokenAddress] != AggregatorV3Interface(address(0)), "Token not accepted");
+        delete acceptedTokens[tokenAddress];
+    }
+
     // === Internal Functions ===
 
     /**
      * @dev Processes the purchase of GPT tokens.
      * @param _amount The amount of tokens to purchase.
+     * @param _paymentToken The address of the payment token.
      */
-    function _processPurchase(uint256 _amount) internal {
-        // Validate purchase amount
+    function _processPurchase(uint256 _amount, address _paymentToken) internal {
         require(_amount > 0, "Amount must be greater than zero");
         require(_amount <= maxPurchaseAmount, "Exceeds maximum purchase amount");
+        require(acceptedTokens[_paymentToken] != AggregatorV3Interface(address(0)), "Payment token not accepted");
 
-        // Access the current sale round
         Round storage round = rounds[currentRoundId];
         require(round.isActive, "No active round");
         require(block.timestamp <= round.endTime, "Round ended");
         require(round.tokensSold + _amount <= round.maxTokens, "Exceeds round limit");
 
-        // Calculate the USDC amount required for the purchase
-        uint256 usdcAmount = calculatePrice(_amount);
+        uint256 tokenAmount = calculatePrice(_amount, _paymentToken);
+        IERC20 paymentToken = IERC20(_paymentToken);
 
-        // Transfer USDC from buyer to contract
-        require(usdcToken.transferFrom(msg.sender, address(this), usdcAmount), "USDC transfer failed");
+        // Use SafeERC20 to handle tokens that don't return a boolean
+        paymentToken.safeTransferFrom(msg.sender, address(this), tokenAmount);
 
-        // Update sale statistics
         round.tokensSold += _amount;
         totalTokensSold += _amount;
-
-        // Mint GPT tokens to buyer
         gptToken.mint(msg.sender, _amount);
 
-        // Emit purchase event
-        emit TokensPurchased(msg.sender, _amount, usdcAmount);
+        emit TokensPurchased(msg.sender, _amount, tokenAmount, _paymentToken);
     }
 
     /**
      * @dev Calculates the USDC price for a given amount of GPT tokens based on the gold price.
      * @param _amount The amount of GPT tokens to calculate the price for.
-     * @return totalPriceUSDC The total USDC amount required for the purchase.
+     * @param _paymentToken The address of the payment token.
+     * @return totalPriceInToken The total amount of the payment token required for the purchase.
      */
-    function calculatePrice(uint256 _amount) internal view returns (uint256) {
-        // Fetch the latest gold price data
-        (, int256 price,, uint256 updatedAt,) = goldPriceFeed.latestRoundData();
+    function calculatePrice(uint256 _amount, address _paymentToken) internal view returns (uint256) {
+        AggregatorV3Interface tokenPriceFeed = acceptedTokens[_paymentToken];
+        require(address(tokenPriceFeed) != address(0), "No price feed for token");
 
-        // Ensure the price data is recent
-        require(block.timestamp - updatedAt <= 1 hours, "Stale price");
+        // Fetch the latest gold price in USD
+        (, int256 goldPrice,, uint256 goldUpdatedAt,) = goldPriceFeed.latestRoundData();
+        require(block.timestamp - goldUpdatedAt <= 1 hours, "Stale gold price");
+        require(goldPrice > 0, "Invalid gold price");
+        uint8 goldDecimals = goldPriceFeed.decimals();
+        uint256 goldPriceUSD = uint256(goldPrice);
 
-        // Ensure the price is valid
-        require(price > 0, "Invalid gold price");
+        // Fetch the latest payment token price in USD
+        (, int256 tokenPrice,, uint256 tokenUpdatedAt,) = tokenPriceFeed.latestRoundData();
+        require(block.timestamp - tokenUpdatedAt <= 1 hours, "Stale token price");
+        require(tokenPrice > 0, "Invalid token price");
+        uint8 tokenDecimals = tokenPriceFeed.decimals();
+        uint256 tokenPriceUSD = uint256(tokenPrice);
 
-        // Adjust the price according to decimals
-        uint8 decimals = goldPriceFeed.decimals();
-        uint256 goldPriceUSD = uint256(price);
+        // Calculate the price of GPT tokens in terms of the payment token
+        uint256 goldPriceAdjusted = goldPriceUSD * (10 ** tokenDecimals) / (10 ** goldDecimals);
+        uint256 totalPriceInToken = (_amount * goldPriceAdjusted) / tokenPriceUSD;
 
-        // Convert gold price to 6 decimal places to match USDC decimals
-        uint256 adjustedGoldPrice = (goldPriceUSD * 1e6) / (10 ** decimals);
-
-        // Calculate total USDC required for the purchase
-        uint256 totalPriceUSDC = (_amount * adjustedGoldPrice) / 10000; // Assuming 1 GPT = 0.0001 ounce of gold
-
-        return totalPriceUSDC;
+        // Adjust for token decimals
+        return totalPriceInToken;
     }
 
     /**
