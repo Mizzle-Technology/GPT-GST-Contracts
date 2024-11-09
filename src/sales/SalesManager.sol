@@ -8,6 +8,7 @@ import "@openzeppelin/utils/cryptography/MessageHashUtils.sol";
 import "@openzeppelin/utils/cryptography/SignatureChecker.sol";
 import "@chainlink/shared/interfaces/AggregatorV3Interface.sol";
 import "../tokens/GoldPackToken.sol";
+import "@openzeppelin/utils/cryptography/ECDSA.sol";
 
 contract SalesContract is AccessControl, ReentrancyGuard {
     enum SaleStage {
@@ -36,6 +37,13 @@ contract SalesContract is AccessControl, ReentrancyGuard {
 
     bool public paused;
 
+    // Domain Separator for EIP-712
+    bytes32 private constant DOMAIN_TYPE_HASH =
+        keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
+    bytes32 private constant PURCHASE_TYPE_HASH =
+        keccak256("Purchase(address buyer,uint256 amount,uint256 nonce,uint256 expiry)");
+    bytes32 private immutable DOMAIN_SEPARATOR;
+
     modifier whenNotPaused() {
         require(!paused, "Contract is paused");
         _;
@@ -49,6 +57,9 @@ contract SalesContract is AccessControl, ReentrancyGuard {
     event AdminRemoved(address indexed account);
     event SaleStageUpdated(SaleStage newStage);
     event MaxPurchaseAmountUpdated(uint256 newAmount);
+    event Paused(address account);
+    event EmergencyWithdraw(address account, uint256 amount);
+    event ERC20Recovered(address indexed token, address indexed to, uint256 amount);
 
     constructor(address _usdcToken, address _gptToken, address _goldPriceFeed, address _trustedSigner) {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
@@ -60,6 +71,12 @@ contract SalesContract is AccessControl, ReentrancyGuard {
         currentStage = SaleStage.PreMarketing;
         trustedSigner = _trustedSigner;
         goldPriceFeed = AggregatorV3Interface(_goldPriceFeed);
+
+        DOMAIN_SEPARATOR = keccak256(
+            abi.encode(
+                DOMAIN_TYPE_HASH, keccak256(bytes("GPTSales")), keccak256(bytes("1")), block.chainid, address(this)
+            )
+        );
     }
 
     // Role management functions
@@ -111,14 +128,12 @@ contract SalesContract is AccessControl, ReentrancyGuard {
     }
 
     // Purchase functions
-    function purchaseTokens(uint256 _amount) external nonReentrant whenNotPaused {
-        require(currentStage == SaleStage.PreSale || currentStage == SaleStage.PublicSale, "Sales not active");
+    // For presale whitelisted users only
+    function presalePurchase(uint256 _amount) external nonReentrant whenNotPaused {
+        require(currentStage == SaleStage.PreSale, "Presale not active");
+        require(whitelistedAddresses[msg.sender], "Not whitelisted");
         require(_amount > 0, "Amount must be greater than zero");
         require(_amount <= maxPurchaseAmount, "Exceeds maximum purchase amount");
-
-        if (currentStage == SaleStage.PreSale) {
-            require(whitelistedAddresses[msg.sender], "Not whitelisted");
-        }
 
         uint256 usdcAmount = calculatePrice(_amount);
         require(usdcToken.transferFrom(msg.sender, address(this), usdcAmount), "USDC transfer failed");
@@ -131,10 +146,9 @@ contract SalesContract is AccessControl, ReentrancyGuard {
     }
 
     function calculatePrice(uint256 _amount) internal view returns (uint256) {
-        (uint80 roundId, int256 price,, uint256 updatedAt, uint80 answeredInRound) = goldPriceFeed.latestRoundData();
+        (, int256 price,, uint256 updatedAt,) = goldPriceFeed.latestRoundData();
+        require(block.timestamp - updatedAt <= 1 hours, "Stale price");
         require(price > 0, "Invalid gold price");
-        require(answeredInRound >= roundId, "Stale price");
-        require(block.timestamp - updatedAt <= 3600, "Stale price");
 
         uint8 decimals = goldPriceFeed.decimals();
         uint256 goldPriceUSD = uint256(price);
@@ -171,14 +185,24 @@ contract SalesContract is AccessControl, ReentrancyGuard {
         emit TokensPurchased(msg.sender, _amount, usdcAmount);
     }
 
+    /// @notice Verifies the signature for authorized purchases
+    /// @param _buyer Address of the buyer
+    /// @param _amount Amount of tokens to purchase
+    /// @param _nonce Current nonce of the buyer
+    /// @param _expiry Expiration timestamp of the signature
+    /// @param _signature Signature from trusted signer
+    /// @return bool Whether the signature is valid
     function verifySignature(address _buyer, uint256 _amount, uint256 _nonce, uint256 _expiry, bytes memory _signature)
         internal
         view
         returns (bool)
     {
-        bytes32 messageHash = keccak256(abi.encode(_buyer, _amount, _nonce, _expiry));
-        bytes32 ethSignedMessageHash = MessageHashUtils.toEthSignedMessageHash(messageHash);
-        return SignatureChecker.isValidSignatureNow(trustedSigner, ethSignedMessageHash, _signature);
+        bytes32 structHash = keccak256(abi.encode(PURCHASE_TYPE_HASH, _buyer, _amount, _nonce, _expiry));
+
+        bytes32 hash = keccak256(abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR, structHash));
+
+        address recoveredSigner = ECDSA.recover(hash, _signature);
+        return recoveredSigner == trustedSigner;
     }
 
     function setTrustedSigner(address _newSigner) external onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -188,5 +212,24 @@ contract SalesContract is AccessControl, ReentrancyGuard {
 
     function withdrawUSDC(uint256 amount) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(usdcToken.transfer(msg.sender, amount), "Transfer failed");
+    }
+
+    // Add pause functionality
+    function pause() external onlyRole(DEFAULT_ADMIN_ROLE) {
+        paused = true;
+        emit Paused(msg.sender);
+    }
+
+    // Add emergency withdrawal
+    function emergencyWithdraw() external onlyRole(DEFAULT_ADMIN_ROLE) {
+        uint256 balance = usdcToken.balanceOf(address(this));
+        require(usdcToken.transfer(msg.sender, balance), "Transfer failed");
+        emit EmergencyWithdraw(msg.sender, balance);
+    }
+
+    function recoverERC20(address tokenAddress, uint256 amount) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(tokenAddress != address(usdcToken), "Cannot recover USDC");
+        require(IERC20(tokenAddress).transfer(msg.sender, amount), "Transfer failed");
+        emit ERC20Recovered(tokenAddress, msg.sender, amount);
     }
 }
