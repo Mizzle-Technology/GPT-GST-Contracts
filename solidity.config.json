@@ -1,0 +1,7 @@
+{
+	"includePath": "lib",
+	"remappings": [
+		"@openzeppelin-upgradeable/=openzeppelin-contracts-upgradeable/contracts/",
+		"@openzeppelin/=openzeppelin-contracts/contracts/"
+	]
+}
