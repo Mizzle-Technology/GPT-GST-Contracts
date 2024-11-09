@@ -6,6 +6,7 @@ import "@openzeppelin/access/AccessControl.sol";
 import "@openzeppelin/utils/ReentrancyGuard.sol";
 import "@openzeppelin/utils/cryptography/MessageHashUtils.sol";
 import "@openzeppelin/utils/cryptography/SignatureChecker.sol";
+import "@chainlink/shared/interfaces/AggregatorV3Interface.sol";
 import "../tokens/GoldPackToken.sol";
 
 contract SalesContract is AccessControl, ReentrancyGuard {
@@ -21,13 +22,24 @@ contract SalesContract is AccessControl, ReentrancyGuard {
     IERC20 public usdcToken;
     GoldPackToken public gptToken;
     address public trustedSigner;
+    AggregatorV3Interface internal goldPriceFeed;
 
     uint256 public saleAmount;
+    uint256 public maxPurchaseAmount;
+    uint256 public maxTokensForSale;
+    uint256 public totalTokensSold;
     mapping(address => bool) public whitelistedAddresses;
     mapping(address => uint256) public nonces;
 
     bytes32 public constant SALES_MANAGER_ROLE = keccak256("SALES_MANAGER_ROLE");
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
+
+    bool public paused;
+
+    modifier whenNotPaused() {
+        require(!paused, "Contract is paused");
+        _;
+    }
 
     event TokensPurchased(address indexed buyer, uint256 amount, uint256 usdcSpent);
     event TrustedSignerUpdated(address indexed newSigner);
@@ -35,8 +47,10 @@ contract SalesContract is AccessControl, ReentrancyGuard {
     event SalesManagerRemoved(address indexed account);
     event AdminAdded(address indexed account);
     event AdminRemoved(address indexed account);
+    event SaleStageUpdated(SaleStage newStage);
+    event MaxPurchaseAmountUpdated(uint256 newAmount);
 
-    constructor(address _usdcToken, address _gptToken, address _trustedSigner) {
+    constructor(address _usdcToken, address _gptToken, address _goldPriceFeed, address _trustedSigner) {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(SALES_MANAGER_ROLE, msg.sender);
         _grantRole(ADMIN_ROLE, msg.sender);
@@ -45,6 +59,7 @@ contract SalesContract is AccessControl, ReentrancyGuard {
         gptToken = GoldPackToken(_gptToken);
         currentStage = SaleStage.PreMarketing;
         trustedSigner = _trustedSigner;
+        goldPriceFeed = AggregatorV3Interface(_goldPriceFeed);
     }
 
     // Role management functions
@@ -96,32 +111,59 @@ contract SalesContract is AccessControl, ReentrancyGuard {
     }
 
     // Purchase functions
-    function purchaseTokens(uint256 _amount) external {
+    function purchaseTokens(uint256 _amount) external nonReentrant whenNotPaused {
         require(currentStage == SaleStage.PreSale || currentStage == SaleStage.PublicSale, "Sales not active");
         require(_amount > 0, "Amount must be greater than zero");
+        require(_amount <= maxPurchaseAmount, "Exceeds maximum purchase amount");
+
         if (currentStage == SaleStage.PreSale) {
             require(whitelistedAddresses[msg.sender], "Not whitelisted");
         }
+
         uint256 usdcAmount = calculatePrice(_amount);
         require(usdcToken.transferFrom(msg.sender, address(this), usdcAmount), "USDC transfer failed");
+
+        require(totalTokensSold + _amount <= maxTokensForSale, "Exceeds available supply");
+        totalTokensSold += _amount;
+
         gptToken.mint(msg.sender, _amount);
         emit TokensPurchased(msg.sender, _amount, usdcAmount);
     }
 
-    function calculatePrice(uint256 _amount) internal pure returns (uint256) {
-        // Implement price calculation logic
-        return _amount * 1e6; // Example: 1 GPT = 1 USDC (assuming USDC has 6 decimals)
+    function calculatePrice(uint256 _amount) internal view returns (uint256) {
+        (uint80 roundId, int256 price,, uint256 updatedAt, uint80 answeredInRound) = goldPriceFeed.latestRoundData();
+        require(price > 0, "Invalid gold price");
+        require(answeredInRound >= roundId, "Stale price");
+        require(block.timestamp - updatedAt <= 3600, "Stale price");
+
+        uint8 decimals = goldPriceFeed.decimals();
+        uint256 goldPriceUSD = uint256(price);
+
+        // Safe math operations (Solidity ^0.8.0 has built-in overflow checking)
+        uint256 adjustedGoldPrice = goldPriceUSD * 1e6 / (10 ** decimals);
+        uint256 totalPriceUSDC = (_amount * adjustedGoldPrice) / 10000;
+
+        return totalPriceUSDC;
     }
 
     // Authorization function for public sale
-    function authorizePurchase(uint256 _amount, uint256 _nonce, bytes memory _signature) external nonReentrant {
+    function authorizePurchase(uint256 _amount, uint256 _nonce, uint256 _expiry, bytes memory _signature)
+        external
+        nonReentrant
+        whenNotPaused
+    {
         require(currentStage == SaleStage.PublicSale, "Public sale not active");
         require(_amount > 0, "Amount must be greater than zero");
+        require(_amount <= maxPurchaseAmount, "Exceeds maximum purchase amount");
         require(_nonce == nonces[msg.sender], "Invalid nonce");
-        require(verifySignature(msg.sender, _amount, _nonce, _signature), "Invalid signature");
+        require(block.timestamp <= _expiry, "Signature expired");
+        require(verifySignature(msg.sender, _amount, _nonce, _expiry, _signature), "Invalid signature");
 
         uint256 usdcAmount = calculatePrice(_amount);
         require(usdcToken.transferFrom(msg.sender, address(this), usdcAmount), "USDC transfer failed");
+
+        require(totalTokensSold + _amount <= maxTokensForSale, "Exceeds available supply");
+        totalTokensSold += _amount;
 
         gptToken.mint(msg.sender, _amount);
         nonces[msg.sender]++;
@@ -129,12 +171,12 @@ contract SalesContract is AccessControl, ReentrancyGuard {
         emit TokensPurchased(msg.sender, _amount, usdcAmount);
     }
 
-    function verifySignature(address _buyer, uint256 _amount, uint256 _nonce, bytes memory _signature)
+    function verifySignature(address _buyer, uint256 _amount, uint256 _nonce, uint256 _expiry, bytes memory _signature)
         internal
         view
         returns (bool)
     {
-        bytes32 messageHash = keccak256(abi.encode(_buyer, _amount, _nonce));
+        bytes32 messageHash = keccak256(abi.encode(_buyer, _amount, _nonce, _expiry));
         bytes32 ethSignedMessageHash = MessageHashUtils.toEthSignedMessageHash(messageHash);
         return SignatureChecker.isValidSignatureNow(trustedSigner, ethSignedMessageHash, _signature);
     }
@@ -142,5 +184,9 @@ contract SalesContract is AccessControl, ReentrancyGuard {
     function setTrustedSigner(address _newSigner) external onlyRole(DEFAULT_ADMIN_ROLE) {
         trustedSigner = _newSigner;
         emit TrustedSignerUpdated(_newSigner);
+    }
+
+    function withdrawUSDC(uint256 amount) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(usdcToken.transfer(msg.sender, amount), "Transfer failed");
     }
 }
