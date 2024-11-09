@@ -63,9 +63,9 @@ contract GoldPackToken is
         __AccessControl_init();
         __ERC20Burnable_init();
 
-        grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
-        grantRole(ADMIN_ROLE, msg.sender);
-        grantRole(SALES_ROLE, msg.sender);
+        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(ADMIN_ROLE, msg.sender);
+        _grantRole(SALES_ROLE, msg.sender);
 
         burnVault = BurnVault(burnVaultAddress);
     }

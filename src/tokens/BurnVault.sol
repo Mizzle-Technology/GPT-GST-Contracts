@@ -29,8 +29,8 @@ contract BurnVault is Initializable, AccessControlUpgradeable {
     function initialize(ERC20Upgradeable _token, uint256 _burnDelay) public initializer {
         __AccessControl_init();
 
-        grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
-        grantRole(ADMIN_ROLE, msg.sender);
+        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(ADMIN_ROLE, msg.sender);
 
         token = _token;
         burnDelay = _burnDelay;
