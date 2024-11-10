@@ -4,6 +4,7 @@ pragma solidity ^0.8.28;
 import "forge-std/Test.sol";
 import "../src/tokens/GoldPackToken.sol";
 import "../src/vault/BurnVault.sol";
+import "@openzeppelin/access/IAccessControl.sol";
 
 contract GoldPackTokenTest is Test {
     GoldPackToken public token;
@@ -169,6 +170,7 @@ contract GoldPackTokenTest is Test {
     }
 
     // Failure cases
+    // This test ensures that minting fails when the contract is paused
     function testFailMintingWhenPaused() public {
         vm.prank(admin);
         token.pause("Testing pause");
@@ -178,34 +180,45 @@ contract GoldPackTokenTest is Test {
     }
 
     function testFailUnauthorizedMint() public {
+        vm.expectRevert(
+            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, user, token.SALES_ROLE())
+        );
         vm.prank(user);
         token.mint(user, token.TOKENS_PER_TROY_OUNCE());
     }
 
-    function testFailInvalidVaultDeposit() public {
+    function testInvalidVaultDeposit() public {
         uint256 invalidAmount = token.TOKENS_PER_TROY_OUNCE() - 1;
+        vm.expectRevert("GoldPackToken: amount must be a whole number of Troy ounces");
         vm.prank(user);
         token.depositToBurnVault(invalidAmount);
     }
 
-    function testFailBurnBeforeDelay() public {
+    function testBurnBeforeDelay() public {
         uint256 amount = token.TOKENS_PER_TROY_OUNCE();
 
         // Setup
         vm.prank(sales);
         token.mint(user, amount);
 
+        // Start at block.timestamp = 1
+        vm.warp(1);
+
         vm.startPrank(user);
         token.approve(address(token), amount);
         token.depositToBurnVault(amount);
         vm.stopPrank();
 
-        // Try burn immediately
+        // Try to burn immediately at same timestamp
+        vm.expectRevert("BurnVault: burn delay not reached");
         vm.prank(sales);
         token.burnFromVault(user);
     }
 
-    function testFailUnauthorizedBurn() public {
+    function testUnauthorizedBurn() public {
+        vm.expectRevert(
+            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, user, token.SALES_ROLE())
+        );
         vm.prank(user);
         token.burnFromVault(user);
     }

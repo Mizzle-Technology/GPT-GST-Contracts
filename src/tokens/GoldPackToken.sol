@@ -13,6 +13,10 @@ import "@openzeppelin/access/AccessControl.sol";
 // Local imports
 import "../vault/BurnVault.sol";
 
+/**
+ * @title IGoldPackToken
+ * @notice Interface for GoldPackToken
+ */
 interface IGoldPackToken {
     // Events for token minting and burning
     event Mint(address indexed to, uint256 amount);
