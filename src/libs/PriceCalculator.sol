@@ -2,6 +2,7 @@
 pragma solidity ^0.8.28;
 
 import "@chainlink/shared/interfaces/AggregatorV3Interface.sol";
+import "forge-std/console.sol";
 
 library PriceCalculator {
     uint256 public constant MAX_PRICE_AGE = 1 hours;
@@ -13,7 +14,7 @@ library PriceCalculator {
      * @param gptAmount The amount of GPT tokens to purchase.
      * @param tokenDecimals The number of decimals the payment token uses.
      * @param tokensPerTroyOunce The number of GPT tokens that represent one troy ounce of gold.
-     * @return The required amount of payment tokens.
+     * @return tokenAmount The required amount of payment tokens.
      */
     function calculateTokenAmount(
         int256 goldPrice,
@@ -21,40 +22,48 @@ library PriceCalculator {
         uint256 gptAmount,
         uint8 tokenDecimals,
         uint256 tokensPerTroyOunce
-    ) internal pure returns (uint256) {
+    ) internal pure returns (uint256 tokenAmount) {
         require(goldPrice > 0, "Invalid gold price");
         require(tokenPrice > 0, "Invalid token price");
         require(tokensPerTroyOunce > 0, "Tokens per troy ounce must be greater than zero");
         require(gptAmount > 0, "GPT amount must be greater than zero");
 
-        // 1. Convert to troy ounces using fixed-point arithmetic with 18 decimals precision
-        uint256 troyOunces = (gptAmount * 1e18) / tokensPerTroyOunce;
+        uint256 goldPriceUint = uint256(goldPrice); // 8 decimals
+        uint256 tokenPriceUint = uint256(tokenPrice); // 8 decimals
 
-        // 2. Calculate USD value using fixed-point arithmetic with 18 decimals precision
-        uint256 usdNeeded = (uint256(goldPrice) * troyOunces) / 1e18;
+        // Calculate the USD value of the GPT tokens (8 decimals)
+        uint256 usdValue = (goldPriceUint * gptAmount) / tokensPerTroyOunce;
 
-        // 3. Convert to payment token amount, rounding up to cover full cost
-        uint256 tokenAmount = (usdNeeded * (10 ** tokenDecimals) + uint256(tokenPrice) - 1) / uint256(tokenPrice);
+        // Calculate the required payment token amount
+        tokenAmount = (usdValue * (10 ** tokenDecimals)) / tokenPriceUint;
 
         return tokenAmount;
     }
 
     /**
-     * @dev Gets latest prices from feeds
+     * @dev Gets the latest prices from price feeds, ensuring they are recent enough.
+     * @param goldFeed The Chainlink price feed for gold (XAU/USD).
+     * @param tokenFeed The Chainlink price feed for the payment token (e.g., USDC/USD).
+     * @return goldPrice The latest gold price per troy ounce in USD.
+     * @return tokenPrice The latest price of the payment token in USD.
      */
     function getLatestPrices(AggregatorV3Interface goldFeed, AggregatorV3Interface tokenFeed)
         internal
         view
         returns (int256 goldPrice, int256 tokenPrice)
     {
+        uint256 goldUpdatedAt;
+        uint256 tokenUpdatedAt;
+
         // Fetch gold price (XAU/USD)
-        uint256 updatedAt;
-        (, goldPrice,, updatedAt,) = goldFeed.latestRoundData();
+        (, goldPrice,, goldUpdatedAt,) = goldFeed.latestRoundData();
         require(goldPrice > 0, "Invalid gold price from feed");
-        require(updatedAt >= block.timestamp - MAX_PRICE_AGE, "Gold price data is stale");
+        uint256 minAllowedTimestamp = MAX_PRICE_AGE > block.timestamp ? 0 : block.timestamp - MAX_PRICE_AGE;
+        require(goldUpdatedAt >= minAllowedTimestamp, "Gold price data is stale");
 
         // Fetch payment token price (e.g., USDC/USD)
-        (, tokenPrice,,,) = tokenFeed.latestRoundData();
+        (, tokenPrice,, tokenUpdatedAt,) = tokenFeed.latestRoundData();
         require(tokenPrice > 0, "Invalid token price from feed");
+        require(tokenUpdatedAt >= minAllowedTimestamp, "Token price data is stale");
     }
 }

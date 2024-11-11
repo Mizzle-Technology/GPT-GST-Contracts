@@ -22,15 +22,14 @@ contract SalesContractTest is Test {
     uint256 private relayerPrivateKey;
 
     function setUp() public {
-        // Mock USDC token
-        usdc = new MockERC20("USD Coin", "USDC", 6);
-
-        // Mock Chainlink Aggregator
+        // Deploy mock tokens and price feeds
+        usdc = new MockERC20("USDC", "USDC", 6);
         goldPriceFeed = new MockAggregator();
-        goldPriceFeed.setPrice(2000 * 10 ** 8); // $2000/oz
-
         usdcPriceFeed = new MockAggregator();
-        usdcPriceFeed.setPrice(1 * 10 ** 8); // $1/USDC
+
+        // Set realistic prices with 8 decimals
+        goldPriceFeed.setPrice(2000 * 10 ** 8); // $2000/oz with 8 decimals
+        usdcPriceFeed.setPrice(1 * 10 ** 8); // $1/USDC with 8 decimals
 
         // Generate private keys
         userPrivateKey = uint256(keccak256("user private key"));
@@ -45,29 +44,37 @@ contract SalesContractTest is Test {
         burnVault.initialize();
 
         // Deploy GoldPackToken and SalesContract
+        vm.prank(admin);
         gptToken = new GoldPackToken(address(burnVault));
+
+        // Note: SalesContract constructor grants DEFAULT_ADMIN_ROLE to msg.sender
+        vm.prank(admin); // Set admin as deployer
         salesContract = new SalesContract(address(gptToken), address(goldPriceFeed), relayer);
+
+        // Grant SALES_ROLE to SalesContract
+        vm.startPrank(admin);
+        gptToken.grantSalesRole(address(salesContract));
+        vm.stopPrank();
 
         // Set up token address in BurnVault
         burnVault.setToken(ERC20(address(gptToken)));
 
         // Setup roles and configuration
         vm.startPrank(admin);
-        salesContract.grantRole(salesContract.ADMIN_ROLE(), admin);
         salesContract.grantRole(salesContract.SALES_MANAGER_ROLE(), sales);
         salesContract.addAcceptedToken(address(usdc), address(usdcPriceFeed), 6);
         salesContract.setSaleStage(SalesContract.SaleStage.PublicSale);
         vm.stopPrank();
 
         // Mint USDC to user
-        usdc.mint(user, 2000 * 10 ** 6); // 2000 USDC
+        usdc.mint(user, 2000 * 10 ** 6); // 2000 USDC with 6 decimals
     }
 
     function testAuthorizePurchase() public {
         // Create order
         SalesContract.Order memory order = SalesContract.Order({
             buyer: user,
-            gptAmount: 10000, // 1 troy ounce
+            gptAmount: 10_000_000000, // 1 troy ounce worth of GPT tokens
             nonce: 0,
             expiry: block.timestamp + 1 hours,
             paymentToken: address(usdc),
@@ -85,15 +92,18 @@ contract SalesContractTest is Test {
         (v, r, s) = vm.sign(relayerPrivateKey, relayerDigest);
         order.relayerSignature = abi.encodePacked(r, s, v);
 
-        // Execute purchase
+        // Approve USDC transfer
         vm.startPrank(user);
-        usdc.approve(address(salesContract), 2000 * 10 ** 6);
-        salesContract.authorizePurchase(order);
+        usdc.approve(address(salesContract), 2000 * 10 ** 6); // Approve 2000 USDC (with 6 decimals)
         vm.stopPrank();
 
+        // Execute purchase
+        vm.prank(user);
+        salesContract.authorizePurchase(order);
+
         // Verify results
-        assertEq(gptToken.balanceOf(user), 10000);
-        assertEq(usdc.balanceOf(user), 0);
+        assertEq(gptToken.balanceOf(user), 10000_000000);
+        assertEq(usdc.balanceOf(user), 0); // Should be 0 if exact
         assertEq(salesContract.nonces(user), 1);
     }
 
@@ -144,11 +154,17 @@ contract MockERC20 is ERC20 {
     }
 }
 
+// Add proper MockAggregator implementation
 contract MockAggregator {
     int256 private _price;
+    uint8 private constant _decimals = 8;
 
     constructor() {
-        _price = 2000 * 10 ** 8; // Current gold price ~$2000/oz
+        _price = 0;
+    }
+
+    function setPrice(int256 price) external {
+        _price = price;
     }
 
     function latestRoundData()
@@ -157,20 +173,15 @@ contract MockAggregator {
         returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)
     {
         return (
-            92233720368547778907, // Example roundId from real feed
-            _price,
-            block.timestamp - 3600, // 1 hour ago
+            1, // roundId
+            _price, // price with 8 decimals
             block.timestamp,
-            92233720368547778907
+            block.timestamp,
+            1
         );
     }
 
     function decimals() external pure returns (uint8) {
-        return 8; // XAU/USD uses 8 decimals
-    }
-
-    // Test helper
-    function setPrice(int256 newPrice) external {
-        _price = newPrice;
+        return _decimals;
     }
 }

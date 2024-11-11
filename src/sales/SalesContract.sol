@@ -9,6 +9,7 @@ import "@openzeppelin/utils/Pausable.sol";
 import "@openzeppelin/utils/cryptography/MessageHashUtils.sol";
 import "@chainlink/shared/interfaces/AggregatorV3Interface.sol";
 import "@openzeppelin/utils/cryptography/ECDSA.sol";
+import "abdk-libraries-solidity/ABDKMath64x64.sol";
 import "../tokens/GoldPackToken.sol";
 import "../libs/PriceCalculator.sol";
 
@@ -25,7 +26,7 @@ contract SalesContract is AccessControl, ReentrancyGuard, Pausable {
     using PriceCalculator for *;
 
     // === Constants ===
-    uint256 public constant TOKENS_PER_TROY_OUNCE = 10000;
+    uint256 public constant TOKENS_PER_TROY_OUNCE = 10_000_000000; // 10,000 GPT tokens with 6 decimals
     uint256 public constant TIMELOCK_DURATION = 24 hours;
     uint256 public constant WITHDRAWAL_THRESHOLD = 100_000e6; // 100k USDC
     /// @dev Maximum time allowed between price updates
