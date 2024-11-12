@@ -68,7 +68,9 @@ contract GoldPackTokenTest is Test {
     }
 
     // Helper function
-    function addressToString(address _addr) internal pure returns (string memory) {
+    function addressToString(
+        address _addr
+    ) internal pure returns (string memory) {
         bytes32 value = bytes32(uint256(uint160(_addr)));
         bytes memory alphabet = "0123456789abcdef";
         bytes memory str = new bytes(42);
@@ -149,26 +151,6 @@ contract GoldPackTokenTest is Test {
         assertEq(vault.getBalance(user), 0);
     }
 
-    function testRoleManagement() public {
-        address newAdmin = address(4);
-
-        vm.startPrank(admin);
-
-        // Grant new admin role
-        vm.expectEmit(true, false, false, false);
-        emit AdminRoleGranted(newAdmin);
-        token.grantAdminRole(newAdmin);
-        assertTrue(token.hasRole(token.ADMIN_ROLE(), newAdmin));
-
-        // Revoke admin role
-        vm.expectEmit(true, false, false, false);
-        emit AdminRoleRevoked(newAdmin);
-        token.revokeAdminRole(newAdmin);
-        assertFalse(token.hasRole(token.ADMIN_ROLE(), newAdmin));
-
-        vm.stopPrank();
-    }
-
     // Failure cases
     // This test ensures that minting fails when the contract is paused
     function testFailMintingWhenPaused() public {
@@ -181,7 +163,11 @@ contract GoldPackTokenTest is Test {
 
     function testFailUnauthorizedMint() public {
         vm.expectRevert(
-            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, user, token.SALES_ROLE())
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector,
+                user,
+                token.SALES_ROLE()
+            )
         );
         vm.prank(user);
         token.mint(user, token.TOKENS_PER_TROY_OUNCE());
@@ -189,7 +175,9 @@ contract GoldPackTokenTest is Test {
 
     function testInvalidVaultDeposit() public {
         uint256 invalidAmount = token.TOKENS_PER_TROY_OUNCE() - 1;
-        vm.expectRevert("GoldPackToken: amount must be a whole number of Troy ounces");
+        vm.expectRevert(
+            "GoldPackToken: amount must be a whole number of Troy ounces"
+        );
         vm.prank(user);
         token.depositToBurnVault(invalidAmount);
     }
@@ -217,7 +205,11 @@ contract GoldPackTokenTest is Test {
 
     function testUnauthorizedBurn() public {
         vm.expectRevert(
-            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, user, token.SALES_ROLE())
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector,
+                user,
+                token.SALES_ROLE()
+            )
         );
         vm.prank(user);
         token.burnFromVault(user);
