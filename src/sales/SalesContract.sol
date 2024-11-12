@@ -33,20 +33,15 @@ contract SalesContract is AccessControl, ReentrancyGuard, Pausable {
     uint256 public constant MAX_PRICE_AGE = 1 hours;
 
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
-    bytes32 public constant SALES_MANAGER_ROLE =
-        keccak256("SALES_MANAGER_ROLE");
+    bytes32 public constant SALES_MANAGER_ROLE = keccak256("SALES_MANAGER_ROLE");
     bytes32 private constant DOMAIN_TYPE_HASH =
-        keccak256(
-            "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
-        );
-    bytes32 public constant USER_ORDER_TYPEHASH =
-        keccak256(
-            "Order(uint256 roundId,address buyer,uint256 gptAmount,uint256 nonce,uint256 expiry,address paymentToken,uint256 chainId)"
-        );
-    bytes32 public constant RELAYER_ORDER_TYPEHASH =
-        keccak256(
-            "RelayerOrder(uint256 roundId,address buyer,uint256 gptAmount,uint256 nonce,uint256 expiry,address paymentToken,bytes userSignature,uint256 chainId)"
-        );
+        keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
+    bytes32 public constant USER_ORDER_TYPEHASH = keccak256(
+        "Order(uint256 roundId,address buyer,uint256 gptAmount,uint256 nonce,uint256 expiry,address paymentToken,uint256 chainId)"
+    );
+    bytes32 public constant RELAYER_ORDER_TYPEHASH = keccak256(
+        "RelayerOrder(uint256 roundId,address buyer,uint256 gptAmount,uint256 nonce,uint256 expiry,address paymentToken,bytes userSignature,uint256 chainId)"
+    );
     bytes32 public immutable DOMAIN_SEPARATOR;
 
     // === State Variables ===
@@ -111,38 +106,17 @@ contract SalesContract is AccessControl, ReentrancyGuard, Pausable {
     }
 
     // === Events ===
-    event TokensPurchased(
-        address indexed buyer,
-        uint256 amount,
-        uint256 tokenSpent,
-        address indexed paymentToken
-    );
-    event RoundCreated(
-        uint256 indexed roundId,
-        uint256 maxTokens,
-        uint256 startTime,
-        uint256 endTime
-    );
+    event TokensPurchased(address indexed buyer, uint256 amount, uint256 tokenSpent, address indexed paymentToken);
+    event RoundCreated(uint256 indexed roundId, uint256 maxTokens, uint256 startTime, uint256 endTime);
     event RoundActivated(uint256 indexed roundId);
     event RoundDeactivated(uint256 indexed roundId);
-    event TrustedSignerUpdated(
-        address indexed oldSigner,
-        address indexed newSigner
-    );
+    event TrustedSignerUpdated(address indexed oldSigner, address indexed newSigner);
     event PriceAgeUpdated(uint256 oldAge, uint256 newAge);
     event Paused(address indexed pauser, uint256 timestamp);
     event Unpaused(address indexed unpauser, uint256 timestamp);
-    event TokenRecovered(
-        address indexed token,
-        uint256 amount,
-        address indexed recipient
-    );
+    event TokenRecovered(address indexed token, uint256 amount, address indexed recipient);
     event ETHRecovered(uint256 amount, address indexed recipient);
-    event WithdrawalQueued(
-        bytes32 indexed withdrawalId,
-        uint256 amount,
-        uint256 timelockExpiry
-    );
+    event WithdrawalQueued(bytes32 indexed withdrawalId, uint256 amount, uint256 timelockExpiry);
     event WithdrawalExecuted(bytes32 indexed withdrawalId, uint256 amount);
     event WithdrawalQueued(
         bytes32 indexed withdrawalId,
@@ -153,16 +127,10 @@ contract SalesContract is AccessControl, ReentrancyGuard, Pausable {
     );
 
     event WithdrawalExecuted(
-        bytes32 indexed withdrawalId,
-        address indexed token,
-        uint256 amount,
-        address indexed executor
+        bytes32 indexed withdrawalId, address indexed token, uint256 amount, address indexed executor
     );
     event WithdrawalCancelled(
-        bytes32 indexed withdrawalId,
-        address indexed token,
-        uint256 amount,
-        address indexed cancelledBy
+        bytes32 indexed withdrawalId, address indexed token, uint256 amount, address indexed cancelledBy
     );
 
     // === Constructor ===
@@ -172,11 +140,7 @@ contract SalesContract is AccessControl, ReentrancyGuard, Pausable {
      * @param _goldPriceFeed Chainlink gold price feed address
      * @param _trustedSigner Address that signs purchase authorizations
      */
-    constructor(
-        address _gptToken,
-        address _goldPriceFeed,
-        address _trustedSigner
-    ) {
+    constructor(address _gptToken, address _goldPriceFeed, address _trustedSigner) {
         require(_gptToken != address(0), "Invalid GPT address");
         require(_goldPriceFeed != address(0), "Invalid price feed address");
         require(_trustedSigner != address(0), "Invalid signer address");
@@ -192,11 +156,7 @@ contract SalesContract is AccessControl, ReentrancyGuard, Pausable {
 
         DOMAIN_SEPARATOR = keccak256(
             abi.encode(
-                DOMAIN_TYPE_HASH,
-                keccak256(bytes("GPTSales")),
-                keccak256(bytes("1")),
-                block.chainid,
-                address(this)
+                DOMAIN_TYPE_HASH, keccak256(bytes("GPTSales")), keccak256(bytes("1")), block.chainid, address(this)
             )
         );
 
@@ -210,17 +170,10 @@ contract SalesContract is AccessControl, ReentrancyGuard, Pausable {
      * @param priceFeed Address of the Chainlink price feed for the token
      * @param decimals Number of decimals the token uses
      */
-    function addAcceptedToken(
-        address token,
-        address priceFeed,
-        uint8 decimals
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function addAcceptedToken(address token, address priceFeed, uint8 decimals) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(token != address(0), "Invalid token address");
-        acceptedTokens[token] = TokenConfig({
-            isAccepted: true,
-            priceFeed: AggregatorV3Interface(priceFeed),
-            decimals: decimals
-        });
+        acceptedTokens[token] =
+            TokenConfig({isAccepted: true, priceFeed: AggregatorV3Interface(priceFeed), decimals: decimals});
     }
 
     // === Round Management ===
@@ -230,20 +183,11 @@ contract SalesContract is AccessControl, ReentrancyGuard, Pausable {
      * @param startTime Start time of the round
      * @param endTime End time of the round
      */
-    function createRound(
-        uint256 maxTokens,
-        uint256 startTime,
-        uint256 endTime
-    ) external onlyRole(SALES_MANAGER_ROLE) {
+    function createRound(uint256 maxTokens, uint256 startTime, uint256 endTime) external onlyRole(SALES_MANAGER_ROLE) {
         require(startTime < endTime, "Invalid round time");
         currentRoundId = nextRoundId;
-        rounds[currentRoundId] = Round({
-            maxTokens: maxTokens,
-            tokensSold: 0,
-            isActive: false,
-            startTime: startTime,
-            endTime: endTime
-        });
+        rounds[currentRoundId] =
+            Round({maxTokens: maxTokens, tokensSold: 0, isActive: false, startTime: startTime, endTime: endTime});
         emit RoundCreated(currentRoundId, maxTokens, startTime, endTime);
         nextRoundId++;
     }
@@ -252,9 +196,7 @@ contract SalesContract is AccessControl, ReentrancyGuard, Pausable {
      * @notice Activates a sale round
      * @param roundId ID of the round to activate
      */
-    function activateRound(
-        uint256 roundId
-    ) external onlyRole(SALES_MANAGER_ROLE) {
+    function activateRound(uint256 roundId) external onlyRole(SALES_MANAGER_ROLE) {
         require(roundId < nextRoundId, "Round does not exist");
         Round storage round = rounds[roundId];
         require(!round.isActive, "Round already active");
@@ -269,9 +211,7 @@ contract SalesContract is AccessControl, ReentrancyGuard, Pausable {
      * @notice Deactivates a sale round
      * @param roundId ID of the round to deactivate
      */
-    function deactivateRound(
-        uint256 roundId
-    ) external onlyRole(SALES_MANAGER_ROLE) {
+    function deactivateRound(uint256 roundId) external onlyRole(SALES_MANAGER_ROLE) {
         require(roundId < nextRoundId, "Round does not exist");
         Round storage round = rounds[roundId];
         require(round.isActive, "Round not active");
@@ -294,27 +234,18 @@ contract SalesContract is AccessControl, ReentrancyGuard, Pausable {
      * @notice Allows a whitelisted address to make a purchase during the presale stage.
      * @param order The amount of tokens to purchase.
      */
-    function presalePurchase(
-        Order calldata order
-    ) external nonReentrant whenNotPaused {
+    function presalePurchase(Order calldata order) external nonReentrant whenNotPaused {
         require(currentStage == SaleStage.PreSale, "Presale not active");
         require(whitelistedAddresses[msg.sender], "Not whitelisted");
 
-        _processPurchase(
-            order.roundId,
-            order.gptAmount,
-            order.paymentToken,
-            order.buyer
-        );
+        _processPurchase(order.roundId, order.gptAmount, order.paymentToken, order.buyer);
     }
 
     /**
      * @notice Allows an authorized purchase during the public sale stage using a signature.
      * @param order The order struct containing the purchase details.
      */
-    function authorizePurchase(
-        Order calldata order
-    ) external nonReentrant whenNotPaused {
+    function authorizePurchase(Order calldata order) external nonReentrant whenNotPaused {
         require(currentStage == SaleStage.PublicSale, "Public sale not active");
         require(order.nonce == nonces[order.buyer], "Invalid nonce");
         require(block.timestamp <= order.expiry, "Signature expired");
@@ -349,12 +280,7 @@ contract SalesContract is AccessControl, ReentrancyGuard, Pausable {
         );
 
         // Process the purchase
-        _processPurchase(
-            order.roundId,
-            order.gptAmount,
-            order.paymentToken,
-            order.buyer
-        );
+        _processPurchase(order.roundId, order.gptAmount, order.paymentToken, order.buyer);
 
         nonces[order.buyer]++;
     }
@@ -366,22 +292,14 @@ contract SalesContract is AccessControl, ReentrancyGuard, Pausable {
      * @param token The address of the token to withdraw
      * @dev Only admin can call
      */
-    function queueWithdrawal(
-        address token,
-        uint256 amount
-    ) external onlyRole(ADMIN_ROLE) {
+    function queueWithdrawal(address token, uint256 amount) external onlyRole(ADMIN_ROLE) {
         require(amount > 0, "Amount must be greater than 0");
         require(acceptedTokens[token].isAccepted, "Token not accepted");
-        require(
-            IERC20(token).balanceOf(address(this)) >= amount,
-            "Insufficient balance"
-        );
+        require(IERC20(token).balanceOf(address(this)) >= amount, "Insufficient balance");
 
         if (amount >= WITHDRAWAL_THRESHOLD) {
             // Large withdrawals need timelock
-            bytes32 withdrawalId = keccak256(
-                abi.encodePacked(block.timestamp, msg.sender, token, amount)
-            );
+            bytes32 withdrawalId = keccak256(abi.encodePacked(block.timestamp, msg.sender, token, amount));
 
             withdrawalRequests[withdrawalId] = WithdrawalRequest({
                 token: token,
@@ -391,23 +309,12 @@ contract SalesContract is AccessControl, ReentrancyGuard, Pausable {
                 cancelled: false
             });
 
-            emit WithdrawalQueued(
-                withdrawalId,
-                token,
-                amount,
-                block.timestamp + TIMELOCK_DURATION,
-                msg.sender
-            );
+            emit WithdrawalQueued(withdrawalId, token, amount, block.timestamp + TIMELOCK_DURATION, msg.sender);
         } else {
             // Small withdrawals execute immediately
             IERC20(token).safeTransfer(msg.sender, amount);
             emit WithdrawalExecuted(
-                keccak256(
-                    abi.encodePacked(block.timestamp, msg.sender, token, amount)
-                ),
-                token,
-                amount,
-                msg.sender
+                keccak256(abi.encodePacked(block.timestamp, msg.sender, token, amount)), token, amount, msg.sender
             );
         }
     }
@@ -420,28 +327,18 @@ contract SalesContract is AccessControl, ReentrancyGuard, Pausable {
      * - Withdrawal must be queued and not executed
      * - Timelock must have expired
      */
-    function executeWithdrawal(
-        bytes32 withdrawalId
-    ) external onlyRole(ADMIN_ROLE) {
+    function executeWithdrawal(bytes32 withdrawalId) external onlyRole(ADMIN_ROLE) {
         WithdrawalRequest storage request = withdrawalRequests[withdrawalId];
         require(request.expiry != 0, "Withdrawal not queued");
         require(!request.executed, "Withdrawal already executed");
         require(!request.cancelled, "Withdrawal already cancelled");
         require(block.timestamp >= request.expiry, "Timelock not expired");
-        require(
-            IERC20(request.token).balanceOf(address(this)) >= request.amount,
-            "Insufficient balance"
-        );
+        require(IERC20(request.token).balanceOf(address(this)) >= request.amount, "Insufficient balance");
 
         request.executed = true;
         IERC20(request.token).safeTransfer(msg.sender, request.amount);
 
-        emit WithdrawalExecuted(
-            withdrawalId,
-            request.token,
-            request.amount,
-            msg.sender
-        );
+        emit WithdrawalExecuted(withdrawalId, request.token, request.amount, msg.sender);
     }
 
     /**
@@ -453,9 +350,7 @@ contract SalesContract is AccessControl, ReentrancyGuard, Pausable {
      * - Withdrawal must not be executed
      * - Withdrawal must not be cancelled
      */
-    function cancelWithdrawal(
-        bytes32 withdrawalId
-    ) external onlyRole(ADMIN_ROLE) {
+    function cancelWithdrawal(bytes32 withdrawalId) external onlyRole(ADMIN_ROLE) {
         WithdrawalRequest storage request = withdrawalRequests[withdrawalId];
         require(request.expiry != 0, "Withdrawal not queued");
         require(!request.executed, "Withdrawal already executed");
@@ -463,12 +358,7 @@ contract SalesContract is AccessControl, ReentrancyGuard, Pausable {
         require(block.timestamp < request.expiry, "Withdrawal period expired");
 
         request.cancelled = true;
-        emit WithdrawalCancelled(
-            withdrawalId,
-            request.token,
-            request.amount,
-            msg.sender
-        );
+        emit WithdrawalCancelled(withdrawalId, request.token, request.amount, msg.sender);
     }
 
     // === Signature Verification ===
@@ -481,22 +371,10 @@ contract SalesContract is AccessControl, ReentrancyGuard, Pausable {
         address paymentToken,
         bytes memory signature
     ) internal view returns (bool) {
-        bytes32 structHash = keccak256(
-            abi.encode(
-                USER_ORDER_TYPEHASH,
-                roundId,
-                buyer,
-                amount,
-                nonce,
-                expiry,
-                paymentToken,
-                chainId
-            )
-        );
+        bytes32 structHash =
+            keccak256(abi.encode(USER_ORDER_TYPEHASH, roundId, buyer, amount, nonce, expiry, paymentToken, chainId));
 
-        bytes32 digest = keccak256(
-            abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR, structHash)
-        );
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR, structHash));
 
         address recoveredSigner = ECDSA.recover(digest, signature);
         require(recoveredSigner != address(0), "Invalid signature");
@@ -515,21 +393,11 @@ contract SalesContract is AccessControl, ReentrancyGuard, Pausable {
     ) internal view returns (bool) {
         bytes32 structHash = keccak256(
             abi.encode(
-                RELAYER_ORDER_TYPEHASH,
-                roundId,
-                buyer,
-                amount,
-                nonce,
-                expiry,
-                paymentToken,
-                userSignature,
-                chainId
+                RELAYER_ORDER_TYPEHASH, roundId, buyer, amount, nonce, expiry, paymentToken, userSignature, chainId
             )
         );
 
-        bytes32 digest = keccak256(
-            abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR, structHash)
-        );
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR, structHash));
 
         require(relayerSignature.length == 65, "Invalid signature length");
         address recoveredSigner = ECDSA.recover(digest, relayerSignature);
@@ -538,24 +406,14 @@ contract SalesContract is AccessControl, ReentrancyGuard, Pausable {
     }
 
     // === Price Calculation ===
-    function calculatePrice(
-        address paymentToken,
-        uint256 gptAmount
-    ) public view returns (uint256 tokenAmount) {
+    function calculatePrice(address paymentToken, uint256 gptAmount) public view returns (uint256 tokenAmount) {
         TokenConfig memory config = acceptedTokens[paymentToken];
         require(config.isAccepted, "Token not accepted");
 
-        (int256 goldPrice, int256 tokenPrice) = PriceCalculator.getLatestPrices(
-            goldPriceFeed,
-            config.priceFeed
-        );
+        (int256 goldPrice, int256 tokenPrice) = PriceCalculator.getLatestPrices(goldPriceFeed, config.priceFeed);
 
         tokenAmount = PriceCalculator.calculateTokenAmount(
-            goldPrice,
-            tokenPrice,
-            gptAmount,
-            config.decimals,
-            TOKENS_PER_TROY_OUNCE
+            goldPrice, tokenPrice, gptAmount, config.decimals, TOKENS_PER_TROY_OUNCE
         );
     }
 
@@ -580,16 +438,10 @@ contract SalesContract is AccessControl, ReentrancyGuard, Pausable {
      * - Cannot recover GPT token
      * - Amount must be <= balance
      */
-    function recoverERC20(
-        address token,
-        uint256 amount
-    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function recoverERC20(address token, uint256 amount) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(token != address(gptToken), "Cannot recover GPT token");
         require(amount > 0, "Amount must be greater than 0");
-        require(
-            IERC20(token).balanceOf(address(this)) >= amount,
-            "Insufficient balance"
-        );
+        require(IERC20(token).balanceOf(address(this)) >= amount, "Insufficient balance");
 
         IERC20(token).safeTransfer(msg.sender, amount);
         emit TokenRecovered(token, amount, msg.sender);
@@ -611,12 +463,7 @@ contract SalesContract is AccessControl, ReentrancyGuard, Pausable {
      *
      * Emits a {TokensPurchased} event.
      */
-    function _processPurchase(
-        uint256 roundId,
-        uint256 amount,
-        address paymentToken,
-        address buyer
-    ) internal {
+    function _processPurchase(uint256 roundId, uint256 amount, address paymentToken, address buyer) internal {
         // check if the contract is paused
         require(!paused(), "Contract is paused");
 
@@ -624,10 +471,7 @@ contract SalesContract is AccessControl, ReentrancyGuard, Pausable {
         Round storage round = rounds[roundId];
         require(round.isActive, "No active round");
         require(block.timestamp <= round.endTime, "Round ended");
-        require(
-            round.tokensSold + amount <= round.maxTokens,
-            "Exceeds round limit"
-        );
+        require(round.tokensSold + amount <= round.maxTokens, "Exceeds round limit");
 
         uint256 tokenAmount = calculatePrice(paymentToken, amount);
 
@@ -636,11 +480,7 @@ contract SalesContract is AccessControl, ReentrancyGuard, Pausable {
         require(userBalance >= tokenAmount, "Insufficient balance");
 
         // Transfer tokens to the contract
-        IERC20(paymentToken).safeTransferFrom(
-            buyer,
-            address(this),
-            tokenAmount
-        );
+        IERC20(paymentToken).safeTransferFrom(buyer, address(this), tokenAmount);
 
         round.tokensSold += amount;
         gptToken.mint(buyer, amount);

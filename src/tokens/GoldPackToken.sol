@@ -49,14 +49,7 @@ interface IGoldPackToken {
  * - Burning restricted to whole Troy ounce increments
  * - Integration with BurnVault for controlled token burning
  */
-contract GoldPackToken is
-    ERC20,
-    ReentrancyGuard,
-    Pausable,
-    AccessControl,
-    ERC20Burnable,
-    IGoldPackToken
-{
+contract GoldPackToken is ERC20, ReentrancyGuard, Pausable, AccessControl, ERC20Burnable, IGoldPackToken {
     // Admin role
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
 
@@ -102,10 +95,7 @@ contract GoldPackToken is
      * Requirements:
      * - Only callable by owner
      */
-    function mint(
-        address to,
-        uint256 amount
-    ) public override onlyRole(SALES_ROLE) whenNotPaused {
+    function mint(address to, uint256 amount) public override onlyRole(SALES_ROLE) whenNotPaused {
         _mint(to, amount);
         emit Mint(to, amount);
     }
@@ -117,14 +107,9 @@ contract GoldPackToken is
      * - Amount must be a multiple of TOKENS_PER_TROY_OUNCE (10000)
      * - Amount must be greater than 0
      */
-    function depositToBurnVault(
-        uint256 amount
-    ) public override nonReentrant whenNotPaused {
+    function depositToBurnVault(uint256 amount) public override nonReentrant whenNotPaused {
         require(amount > 0, "GoldPackToken: amount must be greater than 0");
-        require(
-            amount % TOKENS_PER_TROY_OUNCE == 0,
-            "GoldPackToken: amount must be a whole number of Troy ounces"
-        );
+        require(amount % TOKENS_PER_TROY_OUNCE == 0, "GoldPackToken: amount must be a whole number of Troy ounces");
 
         // Transfer tokens to burn vault
         _transfer(msg.sender, address(burnVault), amount);
@@ -139,9 +124,7 @@ contract GoldPackToken is
      * - Caller must have SALES_ROLE
      * - Account must have tokens in vault
      */
-    function burnFromVault(
-        address account
-    ) public override nonReentrant onlyRole(SALES_ROLE) {
+    function burnFromVault(address account) public override nonReentrant onlyRole(SALES_ROLE) {
         uint256 balance = burnVault.getBalance(account);
         require(balance > 0, "GoldPackToken: no tokens in vault");
 
