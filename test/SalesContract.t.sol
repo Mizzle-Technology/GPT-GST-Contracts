@@ -55,11 +55,7 @@ contract SalesContractTest is Test {
 
         // Note: SalesContract constructor grants DEFAULT_ADMIN_ROLE to msg.sender
         vm.prank(admin); // Set admin as deployer
-        salesContract = new SalesContract(
-            address(gptToken),
-            address(goldPriceFeed),
-            relayer
-        );
+        salesContract = new SalesContract(address(gptToken), address(goldPriceFeed), relayer);
 
         // Grant SALES_ROLE to SalesContract
         vm.startPrank(admin);
@@ -72,11 +68,7 @@ contract SalesContractTest is Test {
         // Setup roles and configuration
         vm.startPrank(admin);
         salesContract.grantRole(salesContract.SALES_MANAGER_ROLE(), sales);
-        salesContract.addAcceptedToken(
-            address(usdc),
-            address(usdcPriceFeed),
-            6
-        );
+        salesContract.addAcceptedToken(address(usdc), address(usdcPriceFeed), 6);
         salesContract.setSaleStage(SalesContract.SaleStage.PublicSale);
         vm.stopPrank();
     }
@@ -87,11 +79,7 @@ contract SalesContractTest is Test {
 
         // Create and activate a sale round
         vm.startPrank(sales);
-        salesContract.createRound(
-            100_000_000000,
-            block.timestamp,
-            block.timestamp + 1 days
-        ); // Create a round with 100,000 GPT tokens
+        salesContract.createRound(100_000_000000, block.timestamp, block.timestamp + 1 days); // Create a round with 100,000 GPT tokens
         salesContract.activateRound(salesContract.currentRoundId()); // Activate the first round
         vm.stopPrank();
 
@@ -135,11 +123,7 @@ contract SalesContractTest is Test {
     function testAuthorizePurchaseInvalidNonce() public {
         // Create and activate a sale round
         vm.startPrank(sales);
-        salesContract.createRound(
-            100_000_000000,
-            block.timestamp,
-            block.timestamp + 1 days
-        ); // Create a round with 100,000 GPT tokens
+        salesContract.createRound(100_000_000000, block.timestamp, block.timestamp + 1 days); // Create a round with 100,000 GPT tokens
         salesContract.activateRound(salesContract.currentRoundId()); // Activate the first round
         vm.stopPrank();
 
@@ -182,11 +166,7 @@ contract SalesContractTest is Test {
 
         // Create and activate a sale round
         vm.startPrank(sales);
-        salesContract.createRound(
-            100_000_000000,
-            block.timestamp,
-            block.timestamp + 1 days
-        ); // Create a round with 100,000 GPT tokens
+        salesContract.createRound(100_000_000000, block.timestamp, block.timestamp + 1 days); // Create a round with 100,000 GPT tokens
         salesContract.activateRound(salesContract.currentRoundId()); // Activate the first round
         vm.stopPrank();
 
@@ -229,11 +209,7 @@ contract SalesContractTest is Test {
 
         // Create and activate a sale round
         vm.startPrank(sales);
-        salesContract.createRound(
-            100_000_000000,
-            block.timestamp,
-            block.timestamp + 1 days
-        ); // Create a round with 100,000 GPT tokens
+        salesContract.createRound(100_000_000000, block.timestamp, block.timestamp + 1 days); // Create a round with 100,000 GPT tokens
         salesContract.activateRound(salesContract.currentRoundId()); // Activate the created round
         vm.stopPrank();
 
@@ -280,11 +256,7 @@ contract SalesContractTest is Test {
 
         // Create and activate a sale round
         vm.startPrank(sales);
-        salesContract.createRound(
-            100_000_000000,
-            block.timestamp,
-            block.timestamp + 1 days
-        ); // Create a round with 100,000 GPT tokens
+        salesContract.createRound(100_000_000000, block.timestamp, block.timestamp + 1 days); // Create a round with 100,000 GPT tokens
         salesContract.activateRound(salesContract.currentRoundId()); // Activate the created round
         vm.stopPrank();
 
@@ -332,11 +304,7 @@ contract SalesContractTest is Test {
 
         // Create and activate a sale round
         vm.startPrank(sales);
-        salesContract.createRound(
-            100_000_000000,
-            block.timestamp,
-            block.timestamp + 1 days
-        ); // Create a round with 100,000 GPT tokens
+        salesContract.createRound(100_000_000000, block.timestamp, block.timestamp + 1 days); // Create a round with 100,000 GPT tokens
         salesContract.activateRound(salesContract.currentRoundId()); // Activate the created round
         vm.stopPrank();
 
@@ -377,11 +345,7 @@ contract SalesContractTest is Test {
     function testFailPurchaseWhenPaused() public {
         // Create and activate a sale round
         vm.startPrank(sales);
-        salesContract.createRound(
-            100_000_000000,
-            block.timestamp,
-            block.timestamp + 1 days
-        );
+        salesContract.createRound(100_000_000000, block.timestamp, block.timestamp + 1 days);
         salesContract.activateRound(salesContract.currentRoundId());
         vm.stopPrank();
 
@@ -425,11 +389,7 @@ contract SalesContractTest is Test {
 
         // Create and activate a sale round
         vm.startPrank(sales);
-        salesContract.createRound(
-            100_000_000000,
-            block.timestamp,
-            block.timestamp + 1 days
-        );
+        salesContract.createRound(100_000_000000, block.timestamp, block.timestamp + 1 days);
         salesContract.activateRound(salesContract.currentRoundId());
         vm.stopPrank();
 
@@ -483,11 +443,7 @@ contract SalesContractTest is Test {
 
         // Create and activate a sale round
         vm.startPrank(sales);
-        salesContract.createRound(
-            200_000_000000,
-            block.timestamp,
-            block.timestamp + 2 days
-        ); // 200,000 GPT tokens
+        salesContract.createRound(200_000_000000, block.timestamp, block.timestamp + 2 days); // 200,000 GPT tokens
         salesContract.activateRound(salesContract.currentRoundId());
         vm.stopPrank();
 
@@ -505,18 +461,12 @@ contract SalesContractTest is Test {
 
         // Generate user signature for order1
         bytes32 userDigest1 = _getUserDigest(order1);
-        (uint8 v1, bytes32 r1, bytes32 s1) = vm.sign(
-            userPrivateKey,
-            userDigest1
-        );
+        (uint8 v1, bytes32 r1, bytes32 s1) = vm.sign(userPrivateKey, userDigest1);
         order1.userSignature = abi.encodePacked(r1, s1, v1);
 
         // Generate relayer signature for order1
         bytes32 relayerDigest1 = _getRelayerDigest(order1);
-        (uint8 v2, bytes32 r2, bytes32 s2) = vm.sign(
-            relayerPrivateKey,
-            relayerDigest1
-        );
+        (uint8 v2, bytes32 r2, bytes32 s2) = vm.sign(relayerPrivateKey, relayerDigest1);
         order1.relayerSignature = abi.encodePacked(r2, s2, v2);
 
         // Approve USDC transfer for order1
@@ -542,18 +492,12 @@ contract SalesContractTest is Test {
 
         // Generate user signature for order2
         bytes32 userDigest2 = _getUserDigest(order2);
-        (uint8 v3, bytes32 r3, bytes32 s3) = vm.sign(
-            userPrivateKey,
-            userDigest2
-        );
+        (uint8 v3, bytes32 r3, bytes32 s3) = vm.sign(userPrivateKey, userDigest2);
         order2.userSignature = abi.encodePacked(r3, s3, v3);
 
         // Generate relayer signature for order2
         bytes32 relayerDigest2 = _getRelayerDigest(order2);
-        (uint8 v4, bytes32 r4, bytes32 s4) = vm.sign(
-            relayerPrivateKey,
-            relayerDigest2
-        );
+        (uint8 v4, bytes32 r4, bytes32 s4) = vm.sign(relayerPrivateKey, relayerDigest2);
         order2.relayerSignature = abi.encodePacked(r4, s4, v4);
 
         // Approve USDC transfer for order2
@@ -575,9 +519,7 @@ contract SalesContractTest is Test {
         assertEq(salesContract.nonces(user), 2); // Nonce incremented twice
     }
 
-    function _getUserDigest(
-        SalesContract.Order memory order
-    ) internal view returns (bytes32) {
+    function _getUserDigest(SalesContract.Order memory order) internal view returns (bytes32) {
         bytes32 structHash = keccak256(
             abi.encode(
                 salesContract.USER_ORDER_TYPEHASH(),
@@ -591,19 +533,10 @@ contract SalesContractTest is Test {
             )
         );
 
-        return
-            keccak256(
-                abi.encodePacked(
-                    "\x19\x01",
-                    salesContract.DOMAIN_SEPARATOR(),
-                    structHash
-                )
-            );
+        return keccak256(abi.encodePacked("\x19\x01", salesContract.DOMAIN_SEPARATOR(), structHash));
     }
 
-    function _getRelayerDigest(
-        SalesContract.Order memory order
-    ) internal view returns (bytes32) {
+    function _getRelayerDigest(SalesContract.Order memory order) internal view returns (bytes32) {
         bytes32 structHash = keccak256(
             abi.encode(
                 salesContract.RELAYER_ORDER_TYPEHASH(),
@@ -618,14 +551,7 @@ contract SalesContractTest is Test {
             )
         );
 
-        return
-            keccak256(
-                abi.encodePacked(
-                    "\x19\x01",
-                    salesContract.DOMAIN_SEPARATOR(),
-                    structHash
-                )
-            );
+        return keccak256(abi.encodePacked("\x19\x01", salesContract.DOMAIN_SEPARATOR(), structHash));
     }
 }
 
@@ -633,11 +559,7 @@ contract SalesContractTest is Test {
 contract MockERC20 is ERC20, ERC20Burnable {
     uint8 private _decimals;
 
-    constructor(
-        string memory name,
-        string memory symbol,
-        uint8 decimals_
-    ) ERC20(name, symbol) {
+    constructor(string memory name, string memory symbol, uint8 decimals_) ERC20(name, symbol) {
         _decimals = decimals_;
     }
 
@@ -667,13 +589,7 @@ contract MockAggregator {
     function latestRoundData()
         external
         view
-        returns (
-            uint80 roundId,
-            int256 answer,
-            uint256 startedAt,
-            uint256 updatedAt,
-            uint80 answeredInRound
-        )
+        returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)
     {
         return (
             1, // roundId
