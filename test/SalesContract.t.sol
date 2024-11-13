@@ -8,6 +8,7 @@ import "@openzeppelin/token/ERC20/extensions/ERC20Burnable.sol";
 import "../src/tokens/GoldPackToken.sol";
 import "../src/sales/SalesContract.sol";
 import "../src/vault/BurnVault.sol";
+import "./Mocks.sol";
 
 contract SalesContractTest is Test {
     // Define constants at the contract level
@@ -69,6 +70,9 @@ contract SalesContractTest is Test {
         vm.startPrank(admin);
         salesContract.grantRole(salesContract.SALES_MANAGER_ROLE(), sales);
         salesContract.addAcceptedToken(address(usdc), address(usdcPriceFeed), 6);
+        vm.stopPrank();
+
+        vm.startPrank(sales);
         salesContract.setSaleStage(SalesContract.SaleStage.PublicSale);
         vm.stopPrank();
     }
@@ -106,9 +110,8 @@ contract SalesContractTest is Test {
         order.relayerSignature = abi.encodePacked(r, s, v);
 
         // Approve USDC transfer
-        vm.startPrank(user);
+        vm.prank(user);
         usdc.approve(address(salesContract), 2000 * 10 ** 6); // Approve 2000 USDC (with 6 decimals)
-        vm.stopPrank();
 
         // Execute purchase
         vm.prank(user);
@@ -236,7 +239,6 @@ contract SalesContractTest is Test {
         // Generate relayer signature
         bytes32 relayerDigest = _getRelayerDigest(order);
         (v, r, s) = vm.sign(relayerPrivateKey, relayerDigest);
-        order.relayerSignature = abi.encodePacked(r, s, v);
         order.relayerSignature = abi.encodePacked(r, s, v);
 
         // Approve USDC transfer
@@ -552,55 +554,5 @@ contract SalesContractTest is Test {
         );
 
         return keccak256(abi.encodePacked("\x19\x01", salesContract.DOMAIN_SEPARATOR(), structHash));
-    }
-}
-
-// Mock contracts
-contract MockERC20 is ERC20, ERC20Burnable {
-    uint8 private _decimals;
-
-    constructor(string memory name, string memory symbol, uint8 decimals_) ERC20(name, symbol) {
-        _decimals = decimals_;
-    }
-
-    function mint(address to, uint256 amount) public {
-        _mint(to, amount);
-    }
-}
-
-// Add proper MockAggregator implementation
-contract MockAggregator {
-    int256 private _price;
-    uint8 private constant _decimals = 8;
-
-    constructor() {
-        _price = 0;
-    }
-
-    function setPrice(int256 price) external {
-        _price = price;
-    }
-
-    // Function to get the latest answer
-    function latestAnswer() external view returns (int256) {
-        return _price;
-    }
-
-    function latestRoundData()
-        external
-        view
-        returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)
-    {
-        return (
-            1, // roundId
-            _price, // price with 8 decimals
-            block.timestamp,
-            block.timestamp,
-            1
-        );
-    }
-
-    function decimals() external pure returns (uint8) {
-        return _decimals;
     }
 }
