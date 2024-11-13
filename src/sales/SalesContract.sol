@@ -20,6 +20,7 @@ import "../libs/PriceCalculator.sol";
  *      SALES_MANAGER_ROLE: Sales and round management
  *      Data Feeds for Testnet: https://docs.chain.link/data-feeds/price-feeds/addresses?network=ethereum&page=1
  *      Data Feeds for Mainnet: https://data.chain.link/feeds
+ * Emits an {AddressWhitelisted} event.
  */
 contract SalesContract is AccessControl, ReentrancyGuard, Pausable {
     using SafeERC20 for IERC20;
@@ -106,7 +107,9 @@ contract SalesContract is AccessControl, ReentrancyGuard, Pausable {
     }
 
     // === Events ===
-    event TokensPurchased(address indexed buyer, uint256 amount, uint256 tokenSpent, address indexed paymentToken);
+    event TokensPurchased(
+        address indexed buyer, uint256 amount, uint256 tokenSpent, address indexed paymentToken, bool isPresale
+    );
     event RoundCreated(uint256 indexed roundId, uint256 maxTokens, uint256 startTime, uint256 endTime);
     event RoundActivated(uint256 indexed roundId);
     event RoundDeactivated(uint256 indexed roundId);
@@ -132,8 +135,11 @@ contract SalesContract is AccessControl, ReentrancyGuard, Pausable {
     event WithdrawalCancelled(
         bytes32 indexed withdrawalId, address indexed token, uint256 amount, address indexed cancelledBy
     );
+    event AddressWhitelisted(address indexed addr);
+    event AddressRemoved(address indexed addr);
 
     // === Constructor ===
+
     /**
      * @notice Contract constructor
      * @param _gptToken GPT token address
@@ -174,6 +180,15 @@ contract SalesContract is AccessControl, ReentrancyGuard, Pausable {
         require(token != address(0), "Invalid token address");
         acceptedTokens[token] =
             TokenConfig({isAccepted: true, priceFeed: AggregatorV3Interface(priceFeed), decimals: decimals});
+    }
+
+    /**
+     * @notice Removes an accepted payment token
+     * @param token Address of the token to remove
+     */
+    function removeAcceptedToken(address token) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(acceptedTokens[token].isAccepted, "Token not accepted");
+        delete acceptedTokens[token];
     }
 
     // === Round Management ===
@@ -225,7 +240,7 @@ contract SalesContract is AccessControl, ReentrancyGuard, Pausable {
      * @notice Sets the current sale stage
      * @param _stage The new sale stage
      */
-    function setSaleStage(SaleStage _stage) external onlyRole(ADMIN_ROLE) {
+    function setSaleStage(SaleStage _stage) external onlyRole(SALES_MANAGER_ROLE) {
         currentStage = _stage;
     }
 
@@ -234,11 +249,42 @@ contract SalesContract is AccessControl, ReentrancyGuard, Pausable {
      * @notice Allows a whitelisted address to make a purchase during the presale stage.
      * @param order The amount of tokens to purchase.
      */
-    function presalePurchase(Order calldata order) external nonReentrant whenNotPaused {
+    function preSalePurchase(Order calldata order) external nonReentrant whenNotPaused {
         require(currentStage == SaleStage.PreSale, "Presale not active");
         require(whitelistedAddresses[msg.sender], "Not whitelisted");
+        require(order.buyer == msg.sender, "Buyer mismatch"); // Added buyer verification
 
-        _processPurchase(order.roundId, order.gptAmount, order.paymentToken, order.buyer);
+        // Signature verifications
+        require(
+            _verifyUserSignature(
+                order.roundId,
+                order.buyer,
+                order.gptAmount,
+                order.nonce,
+                order.expiry,
+                order.paymentToken,
+                order.userSignature
+            ),
+            "Invalid user signature"
+        );
+
+        require(
+            _verifyRelayerSignature(
+                order.roundId,
+                order.buyer,
+                order.gptAmount,
+                order.nonce,
+                order.expiry,
+                order.paymentToken,
+                order.userSignature,
+                order.relayerSignature
+            ),
+            "Invalid relayer signature"
+        );
+
+        _processPurchase(order.roundId, order.gptAmount, order.paymentToken, order.buyer, true);
+
+        nonces[order.buyer]++;
     }
 
     /**
@@ -280,7 +326,7 @@ contract SalesContract is AccessControl, ReentrancyGuard, Pausable {
         );
 
         // Process the purchase
-        _processPurchase(order.roundId, order.gptAmount, order.paymentToken, order.buyer);
+        _processPurchase(order.roundId, order.gptAmount, order.paymentToken, order.buyer, false);
 
         nonces[order.buyer]++;
     }
@@ -447,6 +493,41 @@ contract SalesContract is AccessControl, ReentrancyGuard, Pausable {
         emit TokenRecovered(token, amount, msg.sender);
     }
 
+    // === Whitelist Functions ===
+    /**
+     * @notice Adds an address to the whitelist
+     * @param addr The address to add
+     * Requirements:
+     * - Only admin can call
+     */
+    function addToWhitelist(address addr) external onlyRole(SALES_MANAGER_ROLE) {
+        require(addr != address(0), "Invalid address");
+
+        whitelistedAddresses[addr] = true;
+
+        emit AddressWhitelisted(addr);
+    }
+
+    /**
+     * @notice Removes an address from the whitelist
+     * @param addr The address to remove
+     * /**
+     * @notice Removes an address from the whitelist
+     * @param addr The address to remove
+     * Requirements:
+     * - Only admin can call
+     * Emits a {WhitelistRemoved} event.
+     */
+    function removeFromWhitelist(address addr) external onlyRole(SALES_MANAGER_ROLE) {
+        require(addr != address(0), "Invalid address");
+        require(whitelistedAddresses[addr], "Address not whitelisted");
+
+        whitelistedAddresses[addr] = false;
+        delete whitelistedAddresses[addr];
+
+        emit AddressRemoved(addr);
+    }
+
     // === Internal Functions ===
 
     /**
@@ -463,7 +544,9 @@ contract SalesContract is AccessControl, ReentrancyGuard, Pausable {
      *
      * Emits a {TokensPurchased} event.
      */
-    function _processPurchase(uint256 roundId, uint256 amount, address paymentToken, address buyer) internal {
+    function _processPurchase(uint256 roundId, uint256 amount, address paymentToken, address buyer, bool isPresale)
+        internal
+    {
         // check if the contract is paused
         require(!paused(), "Contract is paused");
 
@@ -475,6 +558,8 @@ contract SalesContract is AccessControl, ReentrancyGuard, Pausable {
 
         uint256 tokenAmount = calculatePrice(paymentToken, amount);
 
+        // console.log("token amount: %s", tokenAmount);
+
         // Check if the buyer has enough balance
         uint256 userBalance = IERC20(paymentToken).balanceOf(buyer);
         require(userBalance >= tokenAmount, "Insufficient balance");
@@ -485,6 +570,6 @@ contract SalesContract is AccessControl, ReentrancyGuard, Pausable {
         round.tokensSold += amount;
         gptToken.mint(buyer, amount);
 
-        emit TokensPurchased(buyer, amount, tokenAmount, paymentToken);
+        emit TokensPurchased(buyer, amount, tokenAmount, paymentToken, isPresale);
     }
 }
