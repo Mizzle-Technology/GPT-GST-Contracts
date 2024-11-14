@@ -2,13 +2,11 @@
 pragma solidity ^0.8.28;
 
 // Core functionality
-import "@openzeppelin/token/ERC20/ERC20.sol";
-import "@openzeppelin/token/ERC20/extensions/ERC20Burnable.sol";
-import "@openzeppelin/utils/Pausable.sol";
-import "@openzeppelin/utils/ReentrancyGuard.sol";
-
-// Access Control
-import "@openzeppelin/access/AccessControl.sol";
+import "@openzeppelin-upgradeable/token/ERC20/ERC20Upgradeable.sol";
+import "@openzeppelin-upgradeable/token/ERC20/extensions/ERC20BurnableUpgradeable.sol";
+import "@openzeppelin-upgradeable/access/AccessControlUpgradeable.sol";
+import "@openzeppelin-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
+import "@openzeppelin-upgradeable/utils/PausableUpgradeable.sol";
 
 // Local imports
 import "../vault/BurnVault.sol";
@@ -49,14 +47,21 @@ interface IGoldPackToken {
  * - Burning restricted to whole Troy ounce increments
  * - Integration with BurnVault for controlled token burning
  */
-contract GoldPackToken is ERC20, ReentrancyGuard, Pausable, AccessControl, ERC20Burnable, IGoldPackToken {
+contract GoldPackToken is
+    ERC20Upgradeable,
+    AccessControlUpgradeable,
+    ReentrancyGuardUpgradeable,
+    PausableUpgradeable,
+    ERC20BurnableUpgradeable,
+    IGoldPackToken
+{
     // Admin role
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
 
     // Sales role for minting tokens
     bytes32 public constant SALES_ROLE = keccak256("SALES_ROLE");
 
-    BurnVault public immutable burnVault;
+    BurnVault public burnVault;
 
     // 1 Troy ounce = 10000 GPT tokens
     uint256 public constant TOKENS_PER_TROY_OUNCE = 10000;
@@ -66,9 +71,17 @@ contract GoldPackToken is ERC20, ReentrancyGuard, Pausable, AccessControl, ERC20
      * @dev Initializes the contract, setting the deployer as the initial owner and admin.
      * @param burnVaultAddress The address of the burn vault contract that will handle token burning.
      */
-    constructor(address burnVaultAddress) ERC20("Gold Pack Token", "GPT") {
+    function initialize(address burnVaultAddress) public initializer {
         require(burnVaultAddress != address(0), "Invalid burn vault address");
+
+        __ERC20_init("Gold Pack Token", "GPT");
+        __ERC20Burnable_init();
+        __AccessControl_init();
+        __ReentrancyGuard_init();
+        __Pausable_init();
+
         burnVault = BurnVault(burnVaultAddress);
+
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(ADMIN_ROLE, msg.sender);
         _grantRole(SALES_ROLE, msg.sender);
