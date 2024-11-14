@@ -3,6 +3,7 @@ pragma solidity ^0.8.28;
 
 import "@openzeppelin-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import "@openzeppelin-upgradeable/token/ERC20/extensions/ERC20BurnableUpgradeable.sol";
+import "../src/vault/TradingVault.sol";
 
 // Mock contracts
 contract MockERC20 is ERC20Upgradeable, ERC20BurnableUpgradeable {
@@ -53,5 +54,12 @@ contract MockAggregator {
 
     function decimals() external pure returns (uint8) {
         return _decimals;
+    }
+}
+
+contract TradingVaultV2 is TradingVault {
+    // Example of a new function added in V2
+    function version() public pure returns (string memory) {
+        return "V2";
     }
 }

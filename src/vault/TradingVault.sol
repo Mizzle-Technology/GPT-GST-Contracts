@@ -34,7 +34,7 @@ contract TradingVault is
     }
 
     address public safeWallet;
-    uint256 public WITHDRAWAL_THRESHOLD = 100_000e6; // 100k USDC
+    uint256 public WITHDRAWAL_THRESHOLD; // 100k USDC
     mapping(bytes32 => WithdrawalRequest) public withdrawalRequests;
 
     event WithdrawalQueued(
@@ -59,6 +59,7 @@ contract TradingVault is
 
         require(_safeWallet != address(0), "Invalid wallet address");
         safeWallet = _safeWallet;
+        WITHDRAWAL_THRESHOLD = 100000 * 10 ** 6; // 100k USDC
     }
 
     // === Queued Withdrawal Functions ===
@@ -177,6 +178,7 @@ contract TradingVault is
      */
     function setWithdrawalWallet(address _safeWallet) external onlyRole(DEFAULT_ADMIN_ROLE) returns (bool) {
         require(_safeWallet != address(0), "Invalid wallet address");
+        require(safeWallet != _safeWallet, "Same wallet address");
         safeWallet = _safeWallet;
         emit WithdrawalWalletUpdated(_safeWallet);
         return true;
