@@ -2,11 +2,11 @@
 pragma solidity ^0.8.28;
 
 // Core functionality
-import "@openzeppelin-upgradeable/token/ERC20/ERC20Upgradeable.sol";
-import "@openzeppelin-upgradeable/token/ERC20/extensions/ERC20BurnableUpgradeable.sol";
-import "@openzeppelin-upgradeable/access/AccessControlUpgradeable.sol";
-import "@openzeppelin-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
-import "@openzeppelin-upgradeable/utils/PausableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20BurnableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 
 // Local imports
 import "../vault/BurnVault.sol";

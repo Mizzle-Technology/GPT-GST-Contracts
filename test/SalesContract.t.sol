@@ -2,9 +2,9 @@
 pragma solidity ^0.8.28;
 
 import "forge-std/Test.sol";
-import "@openzeppelin/utils/cryptography/ECDSA.sol";
-import "@openzeppelin-upgradeable/token/ERC20/ERC20Upgradeable.sol";
-import "@openzeppelin/token/ERC20/extensions/ERC20Burnable.sol";
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
 import "../src/tokens/GoldPackToken.sol";
 import "../src/sales/SalesContract.sol";
 import "../src/vault/BurnVault.sol";

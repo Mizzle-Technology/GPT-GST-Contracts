@@ -2,8 +2,8 @@
 pragma solidity ^0.8.28;
 
 import "forge-std/Test.sol";
-import "@openzeppelin-upgradeable/token/ERC20/ERC20Upgradeable.sol";
-import {Upgrades} from "@openzeppelin-foundry-upgrades/Upgrades.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
+import {Upgrades} from "openzeppelin-foundry-upgrades/Upgrades.sol";
 import "../src/vault/TradingVault.sol"; // Adjust the import path as necessary
 import "../src/vault/BurnVault.sol"; // Ensure correct path
 import "../src/tokens/GoldPackToken.sol"; // Ensure correct path

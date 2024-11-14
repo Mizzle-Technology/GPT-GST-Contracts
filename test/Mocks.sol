@@ -1,8 +1,8 @@
-// SPDX License Identifier: MIT
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import "@openzeppelin-upgradeable/token/ERC20/ERC20Upgradeable.sol";
-import "@openzeppelin-upgradeable/token/ERC20/extensions/ERC20BurnableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20BurnableUpgradeable.sol";
 import "../src/vault/TradingVault.sol";
 
 // Mock contracts

@@ -4,10 +4,10 @@ out = "out"
 libs = ["lib"]
 solc = "0.8.28"
 remappings = [
-	"@openzeppelin-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/",
-	"@openzeppelin/=lib/openzeppelin-contracts/contracts/",
+	"@openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/",
+	"@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+	"abdk-libraries-solidity/=lib/abdk-libraries-solidity/",
 	"@chainlink/=lib/chainlink-brownie-contracts/contracts/src/v0.8/",
-	"@openzeppelin-foundry-upgrades/=lib/openzeppelin-foundry-upgrades/src/",
 ]
 ast = true
 optimizer = true
