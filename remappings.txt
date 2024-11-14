@@ -1,6 +1,5 @@
 @openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/
 @openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/
-abdk-libraries-solidity/=lib/abdk-libraries-solidity/
 @chainlink/=lib/chainlink-brownie-contracts/contracts/src/v0.8/
 chainlink-brownie-contracts/=lib/chainlink-brownie-contracts/
 ds-test/=lib/openzeppelin-contracts-upgradeable/lib/forge-std/lib/ds-test/src/
