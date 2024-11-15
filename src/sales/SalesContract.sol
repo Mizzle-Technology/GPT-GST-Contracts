@@ -8,7 +8,7 @@ import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol
 import "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
-import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 // Chainlink imports
@@ -342,9 +342,7 @@ contract SalesContract is
 
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR, structHash));
 
-        address recoveredSigner = ECDSA.recover(digest, signature);
-        require(recoveredSigner != address(0), "Invalid signature");
-        return recoveredSigner == buyer;
+        return SignatureChecker.isValidSignatureNow(buyer, digest, signature);
     }
 
     function _verifyRelayerSignature(
@@ -366,9 +364,7 @@ contract SalesContract is
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR, structHash));
 
         require(relayerSignature.length == 65, "Invalid signature length");
-        address recoveredSigner = ECDSA.recover(digest, relayerSignature);
-        require(recoveredSigner != address(0), "Invalid signature");
-        return recoveredSigner == trustedSigner;
+        return SignatureChecker.isValidSignatureNow(trustedSigner, digest, relayerSignature);
     }
 
     // === Price Calculation ===
