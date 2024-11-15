@@ -1,14 +1,17 @@
-// SPDX License Identifier: MIT
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import "@openzeppelin/token/ERC20/ERC20.sol";
-import "@openzeppelin/token/ERC20/extensions/ERC20Burnable.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20BurnableUpgradeable.sol";
+import "../src/vault/TradingVault.sol";
 
 // Mock contracts
-contract MockERC20 is ERC20, ERC20Burnable {
+contract MockERC20 is ERC20Upgradeable, ERC20BurnableUpgradeable {
     uint8 private _decimals;
 
-    constructor(string memory name, string memory symbol, uint8 decimals_) ERC20(name, symbol) {
+    function initialize(string memory name, string memory symbol, uint8 decimals_) public initializer {
+        __ERC20_init(name, symbol);
+        __ERC20Burnable_init();
         _decimals = decimals_;
     }
 
@@ -51,5 +54,12 @@ contract MockAggregator {
 
     function decimals() external pure returns (uint8) {
         return _decimals;
+    }
+}
+
+contract TradingVaultV2 is TradingVault {
+    // Example of a new function added in V2
+    function version() public pure returns (string memory) {
+        return "V2";
     }
 }

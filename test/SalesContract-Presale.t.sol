@@ -2,12 +2,13 @@
 pragma solidity ^0.8.28;
 
 import "forge-std/Test.sol";
-import "@openzeppelin/utils/cryptography/ECDSA.sol";
-import "@openzeppelin/token/ERC20/ERC20.sol";
-import "@openzeppelin/token/ERC20/extensions/ERC20Burnable.sol";
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+
+import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import "../src/tokens/GoldPackToken.sol";
 import "../src/sales/SalesContract.sol";
 import "../src/vault/BurnVault.sol";
+import "../src/vault/TradingVault.sol";
 import "./Mocks.sol";
 
 contract SalesContractPresaleTest is Test {
@@ -22,12 +23,14 @@ contract SalesContractPresaleTest is Test {
     MockERC20 private usdc;
     MockAggregator private goldPriceFeed;
     MockAggregator private usdcPriceFeed;
+    TradingVault private tradingVault;
 
     address private user;
     address private relayer;
     address private admin = address(1);
     address private sales = address(2);
     address private user2 = address(3);
+    address private safeWallet = address(4);
     uint256 private userPrivateKey;
     uint256 private relayerPrivateKey;
 
@@ -35,7 +38,9 @@ contract SalesContractPresaleTest is Test {
 
     function setUp() public {
         // Deploy mock tokens and price feeds
-        usdc = new MockERC20("USDC", "USDC", 6);
+        usdc = new MockERC20();
+        usdc.initialize("USDC", "USDC", 6);
+
         goldPriceFeed = new MockAggregator();
         usdcPriceFeed = new MockAggregator();
 
@@ -56,20 +61,24 @@ contract SalesContractPresaleTest is Test {
         burnVault.initialize();
 
         // Deploy GoldPackToken and SalesContract
-        vm.prank(admin);
-        gptToken = new GoldPackToken(address(burnVault));
+        vm.startPrank(admin);
+        gptToken = new GoldPackToken();
+        gptToken.initialize(address(burnVault));
+
+        // Deploy TradingVault
+        tradingVault = new TradingVault();
+        tradingVault.initialize(safeWallet);
 
         // Note: SalesContract constructor grants DEFAULT_ADMIN_ROLE to msg.sender
-        vm.prank(admin); // Set admin as deployer
-        salesContract = new SalesContract(address(gptToken), address(goldPriceFeed), relayer);
+        salesContract = new SalesContract();
+        salesContract.initialize(address(gptToken), address(goldPriceFeed), relayer, address(tradingVault));
 
         // Grant SALES_ROLE to SalesContract
-        vm.startPrank(admin);
         gptToken.grantRole(gptToken.SALES_ROLE(), address(salesContract));
         vm.stopPrank();
 
         // Set up token address in BurnVault
-        burnVault.setToken(ERC20(address(gptToken)));
+        burnVault.setToken(ERC20Upgradeable(address(gptToken)));
 
         // Setup roles and configuration
         vm.startPrank(admin);

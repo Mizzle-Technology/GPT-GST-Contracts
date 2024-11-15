@@ -2,12 +2,13 @@
 pragma solidity ^0.8.28;
 
 import "forge-std/Test.sol";
-import "@openzeppelin/utils/cryptography/ECDSA.sol";
-import "@openzeppelin/token/ERC20/ERC20.sol";
-import "@openzeppelin/token/ERC20/extensions/ERC20Burnable.sol";
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
 import "../src/tokens/GoldPackToken.sol";
 import "../src/sales/SalesContract.sol";
 import "../src/vault/BurnVault.sol";
+import "../src/vault/TradingVault.sol";
 import "./Mocks.sol";
 
 contract SalesContractTest is Test {
@@ -25,12 +26,14 @@ contract SalesContractTest is Test {
     address private relayer;
     address private admin = address(1);
     address private sales = address(2);
+    address private safewWallet = address(3);
     uint256 private userPrivateKey;
     uint256 private relayerPrivateKey;
 
     function setUp() public {
         // Deploy mock tokens and price feeds
-        usdc = new MockERC20("USDC", "USDC", 6);
+        usdc = new MockERC20();
+        usdc.initialize("USDC", "USDC", 6);
         goldPriceFeed = new MockAggregator();
         usdcPriceFeed = new MockAggregator();
 
@@ -50,21 +53,26 @@ contract SalesContractTest is Test {
         BurnVault burnVault = new BurnVault();
         burnVault.initialize();
 
+        // Deploy TradingVault
+        vm.startPrank(admin);
+        TradingVault tradingVault = new TradingVault();
+        tradingVault.initialize(safewWallet);
+
         // Deploy GoldPackToken and SalesContract
-        vm.prank(admin);
-        gptToken = new GoldPackToken(address(burnVault));
+        gptToken = new GoldPackToken();
+        gptToken.initialize(address(burnVault));
 
         // Note: SalesContract constructor grants DEFAULT_ADMIN_ROLE to msg.sender
-        vm.prank(admin); // Set admin as deployer
-        salesContract = new SalesContract(address(gptToken), address(goldPriceFeed), relayer);
+        salesContract = new SalesContract();
+        salesContract.initialize(address(gptToken), address(goldPriceFeed), relayer, address(tradingVault));
 
         // Grant SALES_ROLE to SalesContract
-        vm.startPrank(admin);
+
         gptToken.grantRole(gptToken.SALES_ROLE(), address(salesContract));
         vm.stopPrank();
 
         // Set up token address in BurnVault
-        burnVault.setToken(ERC20(address(gptToken)));
+        burnVault.setToken(ERC20Upgradeable(address(gptToken)));
 
         // Setup roles and configuration
         vm.startPrank(admin);
@@ -279,13 +287,7 @@ contract SalesContractTest is Test {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(userPrivateKey, userDigest);
         order.userSignature = abi.encodePacked(r, s, v);
 
-        // Generate a valid relayer signature and then modify it to be invalid
-        bytes32 relayerDigest = _getRelayerDigest(order);
-        (v, r, s) = vm.sign(relayerPrivateKey, relayerDigest);
-        bytes memory validRelayerSignature = abi.encodePacked(r, s, v);
-        bytes memory invalidRelayerSignature = validRelayerSignature;
-        invalidRelayerSignature[0] = 0x00; // Modify the signature to make it invalid
-        order.relayerSignature = invalidRelayerSignature;
+        order.relayerSignature = abi.encodePacked(r, s, v); // Invalid relayer signature
 
         // Approve USDC transfer
         vm.startPrank(user);

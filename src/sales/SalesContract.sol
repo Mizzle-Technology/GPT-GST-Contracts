@@ -1,17 +1,23 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import "@openzeppelin/token/ERC20/IERC20.sol";
-import "@openzeppelin/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/access/AccessControl.sol";
-import "@openzeppelin/utils/ReentrancyGuard.sol";
-import "@openzeppelin/utils/Pausable.sol";
-import "@openzeppelin/utils/cryptography/MessageHashUtils.sol";
+// OpenZeppelin imports
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
+import "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+// Chainlink imports
 import "@chainlink/shared/interfaces/AggregatorV3Interface.sol";
-import "@openzeppelin/utils/cryptography/ECDSA.sol";
-import "abdk-libraries-solidity/ABDKMath64x64.sol";
+
+// Local imports
 import "../tokens/GoldPackToken.sol";
 import "../libs/PriceCalculator.sol";
+import "../vault/TradingVault.sol";
 
 /**
  * @title SalesContract
@@ -22,14 +28,19 @@ import "../libs/PriceCalculator.sol";
  *      Data Feeds for Mainnet: https://data.chain.link/feeds
  * Emits an {AddressWhitelisted} event.
  */
-contract SalesContract is AccessControl, ReentrancyGuard, Pausable {
-    using SafeERC20 for IERC20;
+contract SalesContract is
+    Initializable,
+    AccessControlUpgradeable,
+    ReentrancyGuardUpgradeable,
+    PausableUpgradeable,
+    UUPSUpgradeable
+{
+    using SafeERC20 for ERC20Upgradeable;
     using PriceCalculator for *;
 
     // === Constants ===
     uint256 public constant TOKENS_PER_TROY_OUNCE = 10_000_000000; // 10,000 GPT tokens with 6 decimals
-    uint256 public constant TIMELOCK_DURATION = 24 hours;
-    uint256 public constant WITHDRAWAL_THRESHOLD = 100_000e6; // 100k USDC
+
     /// @dev Maximum time allowed between price updates
     uint256 public constant MAX_PRICE_AGE = 1 hours;
 
@@ -43,17 +54,18 @@ contract SalesContract is AccessControl, ReentrancyGuard, Pausable {
     bytes32 public constant RELAYER_ORDER_TYPEHASH = keccak256(
         "RelayerOrder(uint256 roundId,address buyer,uint256 gptAmount,uint256 nonce,uint256 expiry,address paymentToken,bytes userSignature,uint256 chainId)"
     );
-    bytes32 public immutable DOMAIN_SEPARATOR;
+    bytes32 public DOMAIN_SEPARATOR;
 
     // === State Variables ===
     uint256 public maxPurchaseAmount;
     uint256 public totalTokensSold;
     uint256 public currentRoundId;
     uint256 public nextRoundId;
-    uint256 private immutable chainId;
+    uint256 private chainId;
     string public pauseReason;
     address public trustedSigner;
     GoldPackToken public gptToken;
+    TradingVault public tradingVault;
     AggregatorV3Interface internal goldPriceFeed;
     SaleStage public currentStage;
 
@@ -62,7 +74,6 @@ contract SalesContract is AccessControl, ReentrancyGuard, Pausable {
     mapping(address => bool) public whitelistedAddresses;
     mapping(address => uint256) public nonces;
     mapping(bytes32 => uint256) public timelockExpiries;
-    mapping(bytes32 => WithdrawalRequest) public withdrawalRequests;
 
     // === Structs and Enums ===
     struct TokenConfig {
@@ -97,15 +108,6 @@ contract SalesContract is AccessControl, ReentrancyGuard, Pausable {
         bytes relayerSignature;
     }
 
-    // withdrawal request struct
-    struct WithdrawalRequest {
-        address token;
-        uint256 amount;
-        uint256 expiry;
-        bool executed;
-        bool cancelled;
-    }
-
     // === Events ===
     event TokensPurchased(
         address indexed buyer, uint256 amount, uint256 tokenSpent, address indexed paymentToken, bool isPresale
@@ -119,22 +121,6 @@ contract SalesContract is AccessControl, ReentrancyGuard, Pausable {
     event Unpaused(address indexed unpauser, uint256 timestamp);
     event TokenRecovered(address indexed token, uint256 amount, address indexed recipient);
     event ETHRecovered(uint256 amount, address indexed recipient);
-    event WithdrawalQueued(bytes32 indexed withdrawalId, uint256 amount, uint256 timelockExpiry);
-    event WithdrawalExecuted(bytes32 indexed withdrawalId, uint256 amount);
-    event WithdrawalQueued(
-        bytes32 indexed withdrawalId,
-        address indexed token,
-        uint256 amount,
-        uint256 timelockExpiry,
-        address indexed initiator
-    );
-
-    event WithdrawalExecuted(
-        bytes32 indexed withdrawalId, address indexed token, uint256 amount, address indexed executor
-    );
-    event WithdrawalCancelled(
-        bytes32 indexed withdrawalId, address indexed token, uint256 amount, address indexed cancelledBy
-    );
     event AddressWhitelisted(address indexed addr);
     event AddressRemoved(address indexed addr);
 
@@ -146,16 +132,26 @@ contract SalesContract is AccessControl, ReentrancyGuard, Pausable {
      * @param _goldPriceFeed Chainlink gold price feed address
      * @param _trustedSigner Address that signs purchase authorizations
      */
-    constructor(address _gptToken, address _goldPriceFeed, address _trustedSigner) {
+    function initialize(address _gptToken, address _goldPriceFeed, address _trustedSigner, address _tradingVault)
+        public
+        initializer
+    {
         require(_gptToken != address(0), "Invalid GPT address");
         require(_goldPriceFeed != address(0), "Invalid price feed address");
         require(_trustedSigner != address(0), "Invalid signer address");
 
+        __AccessControl_init();
+        __ReentrancyGuard_init();
+        __Pausable_init();
+        __UUPSUpgradeable_init();
+
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(ADMIN_ROLE, msg.sender);
         _setRoleAdmin(SALES_MANAGER_ROLE, ADMIN_ROLE);
+        _setRoleAdmin(ADMIN_ROLE, DEFAULT_ADMIN_ROLE);
 
         gptToken = GoldPackToken(_gptToken);
+        tradingVault = TradingVault(_tradingVault);
         goldPriceFeed = AggregatorV3Interface(_goldPriceFeed);
         trustedSigner = _trustedSigner;
         currentStage = SaleStage.PreMarketing;
@@ -331,82 +327,6 @@ contract SalesContract is AccessControl, ReentrancyGuard, Pausable {
         nonces[order.buyer]++;
     }
 
-    // === Withdrawal Functions ===
-    /**
-     * @notice Queues a withdrawal request
-     * @param amount The amount to withdraw
-     * @param token The address of the token to withdraw
-     * @dev Only admin can call
-     */
-    function queueWithdrawal(address token, uint256 amount) external onlyRole(ADMIN_ROLE) {
-        require(amount > 0, "Amount must be greater than 0");
-        require(acceptedTokens[token].isAccepted, "Token not accepted");
-        require(IERC20(token).balanceOf(address(this)) >= amount, "Insufficient balance");
-
-        if (amount >= WITHDRAWAL_THRESHOLD) {
-            // Large withdrawals need timelock
-            bytes32 withdrawalId = keccak256(abi.encodePacked(block.timestamp, msg.sender, token, amount));
-
-            withdrawalRequests[withdrawalId] = WithdrawalRequest({
-                token: token,
-                amount: amount,
-                expiry: block.timestamp + TIMELOCK_DURATION,
-                executed: false,
-                cancelled: false
-            });
-
-            emit WithdrawalQueued(withdrawalId, token, amount, block.timestamp + TIMELOCK_DURATION, msg.sender);
-        } else {
-            // Small withdrawals execute immediately
-            IERC20(token).safeTransfer(msg.sender, amount);
-            emit WithdrawalExecuted(
-                keccak256(abi.encodePacked(block.timestamp, msg.sender, token, amount)), token, amount, msg.sender
-            );
-        }
-    }
-
-    /**
-     * @notice Executes a queued withdrawal request
-     * @param withdrawalId The ID of the withdrawal request
-     * Requirements:
-     * - Only admin can call
-     * - Withdrawal must be queued and not executed
-     * - Timelock must have expired
-     */
-    function executeWithdrawal(bytes32 withdrawalId) external onlyRole(ADMIN_ROLE) {
-        WithdrawalRequest storage request = withdrawalRequests[withdrawalId];
-        require(request.expiry != 0, "Withdrawal not queued");
-        require(!request.executed, "Withdrawal already executed");
-        require(!request.cancelled, "Withdrawal already cancelled");
-        require(block.timestamp >= request.expiry, "Timelock not expired");
-        require(IERC20(request.token).balanceOf(address(this)) >= request.amount, "Insufficient balance");
-
-        request.executed = true;
-        IERC20(request.token).safeTransfer(msg.sender, request.amount);
-
-        emit WithdrawalExecuted(withdrawalId, request.token, request.amount, msg.sender);
-    }
-
-    /**
-     * @notice Cancels a queued withdrawal request
-     * @param withdrawalId The ID of the withdrawal to cancel
-     * Requirements:
-     * - Only admin can call
-     * - Withdrawal must be queued
-     * - Withdrawal must not be executed
-     * - Withdrawal must not be cancelled
-     */
-    function cancelWithdrawal(bytes32 withdrawalId) external onlyRole(ADMIN_ROLE) {
-        WithdrawalRequest storage request = withdrawalRequests[withdrawalId];
-        require(request.expiry != 0, "Withdrawal not queued");
-        require(!request.executed, "Withdrawal already executed");
-        require(!request.cancelled, "Withdrawal already cancelled");
-        require(block.timestamp < request.expiry, "Withdrawal period expired");
-
-        request.cancelled = true;
-        emit WithdrawalCancelled(withdrawalId, request.token, request.amount, msg.sender);
-    }
-
     // === Signature Verification ===
     function _verifyUserSignature(
         uint256 roundId,
@@ -422,9 +342,7 @@ contract SalesContract is AccessControl, ReentrancyGuard, Pausable {
 
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR, structHash));
 
-        address recoveredSigner = ECDSA.recover(digest, signature);
-        require(recoveredSigner != address(0), "Invalid signature");
-        return recoveredSigner == buyer;
+        return SignatureChecker.isValidSignatureNow(buyer, digest, signature);
     }
 
     function _verifyRelayerSignature(
@@ -446,9 +364,7 @@ contract SalesContract is AccessControl, ReentrancyGuard, Pausable {
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR, structHash));
 
         require(relayerSignature.length == 65, "Invalid signature length");
-        address recoveredSigner = ECDSA.recover(digest, relayerSignature);
-        require(recoveredSigner != address(0), "Invalid signature");
-        return recoveredSigner == trustedSigner;
+        return SignatureChecker.isValidSignatureNow(trustedSigner, digest, relayerSignature);
     }
 
     // === Price Calculation ===
@@ -487,9 +403,9 @@ contract SalesContract is AccessControl, ReentrancyGuard, Pausable {
     function recoverERC20(address token, uint256 amount) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(token != address(gptToken), "Cannot recover GPT token");
         require(amount > 0, "Amount must be greater than 0");
-        require(IERC20(token).balanceOf(address(this)) >= amount, "Insufficient balance");
+        require(ERC20Upgradeable(token).balanceOf(address(this)) >= amount, "Insufficient balance");
 
-        IERC20(token).safeTransfer(msg.sender, amount);
+        ERC20Upgradeable(token).safeTransfer(msg.sender, amount);
         emit TokenRecovered(token, amount, msg.sender);
     }
 
@@ -561,15 +477,18 @@ contract SalesContract is AccessControl, ReentrancyGuard, Pausable {
         // console.log("token amount: %s", tokenAmount);
 
         // Check if the buyer has enough balance
-        uint256 userBalance = IERC20(paymentToken).balanceOf(buyer);
+        uint256 userBalance = ERC20Upgradeable(paymentToken).balanceOf(buyer);
         require(userBalance >= tokenAmount, "Insufficient balance");
 
         // Transfer tokens to the contract
-        IERC20(paymentToken).safeTransferFrom(buyer, address(this), tokenAmount);
+        ERC20Upgradeable(paymentToken).safeTransferFrom(buyer, address(tradingVault), tokenAmount);
 
         round.tokensSold += amount;
         gptToken.mint(buyer, amount);
 
         emit TokensPurchased(buyer, amount, tokenAmount, paymentToken, isPresale);
     }
+
+    // === UUPS Upgrade ===
+    function _authorizeUpgrade(address newImplementation) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
 }

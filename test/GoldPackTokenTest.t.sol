@@ -4,7 +4,8 @@ pragma solidity ^0.8.28;
 import "forge-std/Test.sol";
 import "../src/tokens/GoldPackToken.sol";
 import "../src/vault/BurnVault.sol";
-import "@openzeppelin/access/IAccessControl.sol";
+import "@openzeppelin/contracts/access/IAccessControl.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 
 contract GoldPackTokenTest is Test {
     GoldPackToken public token;
@@ -32,14 +33,15 @@ contract GoldPackTokenTest is Test {
         vault = new BurnVault();
         vault.initialize();
 
-        console.log("Vault address:", address(vault));
+        // console.log("Vault address:", address(vault));
 
         // Step 2: Deploy token with vault address
-        token = new GoldPackToken(address(vault));
-        console.log("Token address:", address(token));
+        token = new GoldPackToken();
+        token.initialize(address(vault));
+        // console.log("Token address:", address(token));
 
         // Step 3: Set token in vault
-        vault.setToken(ERC20(address(token)));
+        vault.setToken(ERC20Upgradeable(address(token)));
 
         // Step 4: Grant roles
         token.grantRole(token.SALES_ROLE(), sales);
@@ -50,7 +52,7 @@ contract GoldPackTokenTest is Test {
         vm.stopPrank();
 
         // Debug setup
-        console.log("Token's vault address:", address(token.burnVault()));
+        // console.log("Token's vault address:", address(token.burnVault()));
 
         // Verify setup with better error message
         if (address(token.burnVault()) != address(vault)) {
