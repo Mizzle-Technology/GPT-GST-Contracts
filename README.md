@@ -4,25 +4,6 @@ A set of smart contracts for managing the sale, minting, and burning of Gold Pac
 
 ---
 
-## Table of Contents
-
-- [Overview](https://www.notion.so/GPT-GST-Contracts-Development-13899f541eec8090ba5ae1ea7598a195?pvs=21)
-- [Contracts](https://www.notion.so/GPT-GST-Contracts-Development-13899f541eec8090ba5ae1ea7598a195?pvs=21)
-    - [GPT Contract](https://www.notion.so/GPT-GST-Contracts-Development-13899f541eec8090ba5ae1ea7598a195?pvs=21)
-    - [Sales Contract](https://www.notion.so/GPT-GST-Contracts-Development-13899f541eec8090ba5ae1ea7598a195?pvs=21)
-    - [BurnVault](https://www.notion.so/GPT-GST-Contracts-Development-13899f541eec8090ba5ae1ea7598a195?pvs=21)
-    - [TradingVault](https://www.notion.so/GPT-GST-Contracts-Development-13899f541eec8090ba5ae1ea7598a195?pvs=21)
-    - [PriceCalculator Library](https://www.notion.so/GPT-GST-Contracts-Development-13899f541eec8090ba5ae1ea7598a195?pvs=21)
-- [Setup and Installation](https://www.notion.so/GPT-GST-Contracts-Development-13899f541eec8090ba5ae1ea7598a195?pvs=21)
-- [Foundry Test Suite](https://www.notion.so/GPT-GST-Contracts-Development-13899f541eec8090ba5ae1ea7598a195?pvs=21)
-- [Usage Guide](https://www.notion.so/GPT-GST-Contracts-Development-13899f541eec8090ba5ae1ea7598a195?pvs=21)
-    - [Deploying Contracts](https://www.notion.so/GPT-GST-Contracts-Development-13899f541eec8090ba5ae1ea7598a195?pvs=21)
-    - [Interacting with Contracts](https://www.notion.so/GPT-GST-Contracts-Development-13899f541eec8090ba5ae1ea7598a195?pvs=21)
-    - [Upgradeability](https://www.notion.so/GPT-GST-Contracts-Development-13899f541eec8090ba5ae1ea7598a195?pvs=21)
-- [License](https://www.notion.so/GPT-GST-Contracts-Development-13899f541eec8090ba5ae1ea7598a195?pvs=21)
-
----
-
 ## Overview
 
 This repository contains a suite of contracts and a utility library for managing a gold-backed ERC20 token (GPT), handling sales stages, secure withdrawals, token burning, and price calculations. Each contract is designed with upgradeability, security, and role-based access control.
