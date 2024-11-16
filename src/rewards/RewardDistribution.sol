@@ -9,7 +9,6 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-
 /**
  * @title RewardDistribution
  * @notice Contract for distributing rewards to shareholders
@@ -18,7 +17,12 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
  * - Rewards can be topped up by the admin
  * - Rewards can be locked and unlocked by the admin
  */
-contract RewardDistribution is Initializable, AccessControlUpgradeable, ReentrancyGuardUpgradeable, PausableUpgradeable {
+contract RewardDistribution is
+    Initializable,
+    AccessControlUpgradeable,
+    ReentrancyGuardUpgradeable,
+    PausableUpgradeable
+{
     using SafeERC20 for IERC20;
 
     // Roles
@@ -93,6 +97,4 @@ contract RewardDistribution is Initializable, AccessControlUpgradeable, Reentran
 
         emit RewardToppedUp(amount);
     }
-
-
 }
