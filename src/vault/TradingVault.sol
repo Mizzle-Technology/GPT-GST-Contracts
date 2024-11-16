@@ -7,13 +7,15 @@ import "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "./ITradingVault.sol";
 
 contract TradingVault is
     Initializable,
     AccessControlUpgradeable,
     ReentrancyGuardUpgradeable,
     PausableUpgradeable,
-    UUPSUpgradeable
+    UUPSUpgradeable,
+    ITradingVault
 {
     using SafeERC20 for ERC20Upgradeable;
 
@@ -35,17 +37,6 @@ contract TradingVault is
     address public safeWallet;
     uint256 public WITHDRAWAL_THRESHOLD; // 100k USDC
     mapping(bytes32 => WithdrawalRequest) public withdrawalRequests;
-
-    event WithdrawalQueued(
-        bytes32 indexed requestId, address token, uint256 amount, address to, uint256 requestTime, uint256 expiry
-    );
-    event WithdrawalExecuted(
-        bytes32 indexed requestId, address token, uint256 amount, address to, uint256 executedTime
-    );
-    event WithdrawalCancelled(bytes32 indexed requestId, address token, uint256 amount, address to, uint256 cancelTime);
-    event WithdrawalWalletUpdated(address indexed newWallet);
-    event WithdrawalThresholdUpdated(uint256 indexed newThreshold);
-    event ImmediateWithdrawal(address indexed token, uint256 amount, address to, uint256 timestamp);
 
     function initialize(address _safeWallet) public initializer {
         __AccessControl_init();
