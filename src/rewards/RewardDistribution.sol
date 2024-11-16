@@ -5,7 +5,7 @@ import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
-import "@openzeppelin-contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
@@ -37,7 +37,8 @@ contract RewardDistribution is
     }
 
     struct RewardsInfo {
-
+        uint256 totalRewards; // total rewards available for distribution
+        uint256 distributionTime; // timestamp of the reward distribution
     }
 
     uint256 public totalRewards;
@@ -47,6 +48,7 @@ contract RewardDistribution is
     mapping(address => Shareholder) public shareholders;
     mapping(address => uint256) public rewardsClaimed; // User => Total claimed rewards
     mapping(address => bool) public rewardsLocked; // User => Whether rewards are locked
+    mapping(bytes32 => RewardsInfo) public rewardsInfo; // Reward ID => Rewards Info
 
     IERC20 public rewardToken;
 
@@ -219,7 +221,7 @@ contract RewardDistribution is
         emit RewardsDistributed(amount);
     }
 
-     // === Pause Functions ===
+    // === Pause Functions ===
 
     /**
      * @notice Pauses the contract, disabling certain functionalities.
@@ -248,7 +250,7 @@ contract RewardDistribution is
      * @param account The address to query rewards for.
      * @return The amount of pending rewards.
      */
-    function pendingRewards(address account) external view returns (uint256) {
+    function getPendingRewards(address account) external view returns (uint256) {
         Shareholder storage shares = shareholders[account];
         if (shares.shares == 0) {
             return 0;
