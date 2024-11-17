@@ -7,6 +7,7 @@ import "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20Burnable
 import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
 // Local imports
 import "../vault/BurnVault.sol";
@@ -53,6 +54,7 @@ contract GoldPackToken is
     ReentrancyGuardUpgradeable,
     PausableUpgradeable,
     ERC20BurnableUpgradeable,
+    UUPSUpgradeable,
     IGoldPackToken
 {
     // Admin role
@@ -66,6 +68,9 @@ contract GoldPackToken is
     // 1 Troy ounce = 10000 GPT tokens
     uint256 public constant TOKENS_PER_TROY_OUNCE = 10000;
     uint256 public constant BURN_DELAY = 7 days;
+
+    //private
+    uint256[50] private __gap;
 
     /**
      * @dev Initializes the contract, setting the deployer as the initial owner and admin.
@@ -165,4 +170,7 @@ contract GoldPackToken is
     function isSales(address account) public view returns (bool) {
         return hasRole(SALES_ROLE, account);
     }
+
+    // === UUPS Upgrade ===
+    function _authorizeUpgrade(address newImplementation) internal view override onlyRole(ADMIN_ROLE) {}
 }

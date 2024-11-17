@@ -7,6 +7,7 @@ import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
 import "../src/tokens/GoldPackToken.sol";
 import "../src/sales/SalesContract.sol";
+import "../src/sales/ISalesContract.sol";
 import "../src/vault/BurnVault.sol";
 import "../src/vault/TradingVault.sol";
 import "./Mocks.sol";
@@ -18,6 +19,7 @@ contract SalesContractTest is Test {
 
     GoldPackToken private gptToken;
     SalesContract private salesContract;
+    TradingVault private tradingVault;
     MockERC20 private usdc;
     MockAggregator private goldPriceFeed;
     MockAggregator private usdcPriceFeed;
@@ -55,7 +57,7 @@ contract SalesContractTest is Test {
 
         // Deploy TradingVault
         vm.startPrank(admin);
-        TradingVault tradingVault = new TradingVault();
+        tradingVault = new TradingVault();
         tradingVault.initialize(safewWallet);
 
         // Deploy GoldPackToken and SalesContract
@@ -81,7 +83,7 @@ contract SalesContractTest is Test {
         vm.stopPrank();
 
         vm.startPrank(sales);
-        salesContract.setSaleStage(SalesContract.SaleStage.PublicSale);
+        salesContract.setSaleStage(ISalesContract.SaleStage.PublicSale);
         vm.stopPrank();
     }
 
@@ -96,7 +98,7 @@ contract SalesContractTest is Test {
         vm.stopPrank();
 
         // Create order
-        SalesContract.Order memory order = SalesContract.Order({
+        SalesContract.Order memory order = ISalesContract.Order({
             roundId: salesContract.currentRoundId(),
             buyer: user,
             gptAmount: 10_000_000000, // 1 troy ounce worth of GPT tokens
@@ -139,7 +141,7 @@ contract SalesContractTest is Test {
         vm.stopPrank();
 
         // Create order with invalid nonce
-        SalesContract.Order memory order = SalesContract.Order({
+        SalesContract.Order memory order = ISalesContract.Order({
             roundId: salesContract.currentRoundId(),
             buyer: user,
             gptAmount: 10_000_000000, // 1 troy ounce worth of GPT tokens
@@ -162,7 +164,7 @@ contract SalesContractTest is Test {
 
         // Approve USDC transfer
         vm.startPrank(user);
-        usdc.approve(address(salesContract), 2000 * 10 ** 6); // Approve 2000 USDC (with 6 decimals)
+        usdc.approve(address(tradingVault), 2000 * 10 ** 6); // Approve 2000 USDC (with 6 decimals)
         vm.stopPrank();
 
         // Execute purchase and expect revert
@@ -182,7 +184,7 @@ contract SalesContractTest is Test {
         vm.stopPrank();
 
         // Create order with expired signature
-        SalesContract.Order memory order = SalesContract.Order({
+        SalesContract.Order memory order = ISalesContract.Order({
             roundId: salesContract.currentRoundId(),
             buyer: user,
             gptAmount: 10_000_000000, // 1 troy ounce worth of GPT tokens
@@ -205,7 +207,7 @@ contract SalesContractTest is Test {
 
         // Approve USDC transfer
         vm.startPrank(user);
-        usdc.approve(address(salesContract), 2000 * 10 ** 6); // Approve 2000 USDC (with 6 decimals)
+        usdc.approve(address(tradingVault), 2000 * 10 ** 6); // Approve 2000 USDC (with 6 decimals)
         vm.stopPrank();
 
         // Execute purchase and expect revert
@@ -225,7 +227,7 @@ contract SalesContractTest is Test {
         vm.stopPrank();
 
         // Create order with invalid user signature
-        SalesContract.Order memory order = SalesContract.Order({
+        SalesContract.Order memory order = ISalesContract.Order({
             roundId: salesContract.currentRoundId(),
             buyer: user,
             gptAmount: 10_000_000000, // 1 troy ounce worth of GPT tokens
@@ -251,7 +253,7 @@ contract SalesContractTest is Test {
 
         // Approve USDC transfer
         vm.startPrank(user);
-        usdc.approve(address(salesContract), 2000 * 10 ** 6); // Approve 2000 USDC (with 6 decimals)
+        usdc.approve(address(tradingVault), 2000 * 10 ** 6); // Approve 2000 USDC (with 6 decimals)
         vm.stopPrank();
 
         // Execute purchase and expect revert
@@ -271,7 +273,7 @@ contract SalesContractTest is Test {
         vm.stopPrank();
 
         // Create order with invalid relayer signature
-        SalesContract.Order memory order = SalesContract.Order({
+        SalesContract.Order memory order = ISalesContract.Order({
             roundId: salesContract.currentRoundId(),
             buyer: user,
             gptAmount: 10_000_000000, // 1 troy ounce worth of GPT tokens
@@ -291,7 +293,7 @@ contract SalesContractTest is Test {
 
         // Approve USDC transfer
         vm.startPrank(user);
-        usdc.approve(address(salesContract), 2000 * 10 ** 6); // Approve 2000 USDC (with 6 decimals)
+        usdc.approve(address(tradingVault), 2000 * 10 ** 6); // Approve 2000 USDC (with 6 decimals)
         vm.stopPrank();
 
         // Execute purchase and expect revert
@@ -313,7 +315,7 @@ contract SalesContractTest is Test {
         vm.stopPrank();
 
         // Create order
-        SalesContract.Order memory order = SalesContract.Order({
+        SalesContract.Order memory order = ISalesContract.Order({
             roundId: salesContract.currentRoundId(),
             buyer: user,
             gptAmount: 10_000_000000, // 1 troy ounce worth of GPT tokens
@@ -336,7 +338,7 @@ contract SalesContractTest is Test {
 
         // Approve USDC transfer
         vm.startPrank(user);
-        usdc.approve(address(salesContract), 2000 * 10 ** 6); // Approve 2000 USDC (with 6 decimals)
+        usdc.approve(address(tradingVault), 2000 * 10 ** 6); // Approve 2000 USDC (with 6 decimals)
         usdc.burn(2000 * 10 ** 6); // Burn 2000 USDC
         vm.stopPrank();
 
@@ -358,7 +360,7 @@ contract SalesContractTest is Test {
         salesContract.pause();
 
         // Create order
-        SalesContract.Order memory order = SalesContract.Order({
+        SalesContract.Order memory order = ISalesContract.Order({
             roundId: salesContract.currentRoundId(),
             buyer: user,
             gptAmount: 10_000_000000,
@@ -380,7 +382,7 @@ contract SalesContractTest is Test {
 
         // Approve USDC transfer
         vm.startPrank(user);
-        usdc.approve(address(salesContract), 1000 * 10 ** 6);
+        usdc.approve(address(tradingVault), 1000 * 10 ** 6);
         vm.stopPrank();
 
         // Attempt purchase and expect revert due to paused contract
@@ -406,7 +408,7 @@ contract SalesContractTest is Test {
         vm.stopPrank();
 
         // Create order
-        SalesContract.Order memory order = SalesContract.Order({
+        SalesContract.Order memory order = ISalesContract.Order({
             roundId: salesContract.currentRoundId(),
             buyer: user,
             gptAmount: 10_000_000000,
@@ -452,7 +454,7 @@ contract SalesContractTest is Test {
         vm.stopPrank();
 
         // First purchase: 50 GPT tokens
-        SalesContract.Order memory order1 = SalesContract.Order({
+        SalesContract.Order memory order1 = ISalesContract.Order({
             roundId: salesContract.currentRoundId(),
             buyer: user,
             gptAmount: 5_000_000000, // 5000 GPT tokens
@@ -483,7 +485,7 @@ contract SalesContractTest is Test {
         salesContract.authorizePurchase(order1);
 
         // Second purchase: 30 GPT tokens
-        SalesContract.Order memory order2 = SalesContract.Order({
+        SalesContract.Order memory order2 = ISalesContract.Order({
             roundId: salesContract.currentRoundId(),
             buyer: user,
             gptAmount: 3_000_000000, // 3000 GPT tokens

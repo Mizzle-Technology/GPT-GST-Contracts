@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.28;
+pragma solidity 0.8.28;
 
 import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -13,6 +13,9 @@ contract BurnVault is Initializable, AccessControlUpgradeable, ReentrancyGuardUp
     using SafeERC20 for ERC20Upgradeable;
 
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
+
+    // storage gap
+    uint256[50] private __gap;
 
     // Set burn delay to 7 days
     uint256 public constant BURN_DELAY = 7 days;

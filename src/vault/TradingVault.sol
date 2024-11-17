@@ -1,26 +1,30 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.28;
+pragma solidity 0.8.28;
 
 import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "./ITradingVault.sol";
 
 contract TradingVault is
     Initializable,
     AccessControlUpgradeable,
     ReentrancyGuardUpgradeable,
     PausableUpgradeable,
-    UUPSUpgradeable
+    UUPSUpgradeable,
+    ITradingVault
 {
     using SafeERC20 for ERC20Upgradeable;
 
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
     bytes32 public constant WITHDRAWER_ROLE = keccak256("WITHDRAWER_ROLE");
     uint256 public constant WITHDRAWAL_DELAY = 1 days;
+
+    // storage gap
+    uint256[50] private __gap;
 
     // withdrawal request struct
     struct WithdrawalRequest {
@@ -36,17 +40,6 @@ contract TradingVault is
     address public safeWallet;
     uint256 public WITHDRAWAL_THRESHOLD; // 100k USDC
     mapping(bytes32 => WithdrawalRequest) public withdrawalRequests;
-
-    event WithdrawalQueued(
-        bytes32 indexed requestId, address token, uint256 amount, address to, uint256 requestTime, uint256 expiry
-    );
-    event WithdrawalExecuted(
-        bytes32 indexed requestId, address token, uint256 amount, address to, uint256 executedTime
-    );
-    event WithdrawalCancelled(bytes32 indexed requestId, address token, uint256 amount, address to, uint256 cancelTime);
-    event WithdrawalWalletUpdated(address indexed newWallet);
-    event WithdrawalThresholdUpdated(uint256 indexed newThreshold);
-    event ImmediateWithdrawal(address indexed token, uint256 amount, address to, uint256 timestamp);
 
     function initialize(address _safeWallet) public initializer {
         __AccessControl_init();
