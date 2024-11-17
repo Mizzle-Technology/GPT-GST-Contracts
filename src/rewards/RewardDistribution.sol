@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.28;
+pragma solidity 0.8.28;
 
 import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
@@ -7,7 +7,9 @@ import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol
 import "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
+import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
+import "../vault/TradingVault.sol";
 
 /**
  * @title RewardDistribution
@@ -23,7 +25,8 @@ contract RewardDistribution is
     OwnableUpgradeable,
     PausableUpgradeable
 {
-    using SafeERC20 for IERC20;
+    using SafeERC20 for ERC20Upgradeable;
+    using EnumerableSet for EnumerableSet.AddressSet;
 
     // === constants ===
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
@@ -32,29 +35,28 @@ contract RewardDistribution is
 
     struct Shareholder {
         uint256 shares; // number of shares held by the shareholder
-        uint256 rewardDebt; // timestamp of the last reward claim
         bool isLocked; // if true, rewards are locked for this shareholder
+        bool isActivated; // if true, the shareholder is active
     }
 
-    struct RewardsInfo {
-        uint256 totalRewards; // total rewards available for distribution
-        uint256 distributionTime; // timestamp of the reward distribution
+    struct Distribution {
+        uint256 totalRewards; // Total rewards in this distribution
+        uint256 distributionTime; // Time when rewards become claimable
+        mapping(address => bool) claimed; // Tracks whether a shareholder has claimed their reward
     }
 
-    uint256 public totalRewards;
-    uint256 public totalShares;
+    uint256 public totalShares; // total shares allocated
+    ERC20Upgradeable public rewardToken; // reward token
+    EnumerableSet.AddressSet private shareholderAddresses; // total number of shareholders
 
     // Mapping to store shareholders and their shares
     mapping(address => Shareholder) public shareholders;
     mapping(address => uint256) public rewardsClaimed; // User => Total claimed rewards
     mapping(address => bool) public rewardsLocked; // User => Whether rewards are locked
-    mapping(bytes32 => RewardsInfo) public rewardsInfo; // Reward ID => Rewards Info
-
-    IERC20 public rewardToken;
+    mapping(bytes32 => Distribution) public distributions; // Distribution ID => Distribution details
 
     // Reward schedule variables
     uint256 public lastDistributionTime;
-    uint256 public distributionInterval; // In seconds (e.g., 1 day = 86400)
 
     // Events
     event SharesAllocated(address indexed account, uint256 shares);
@@ -63,9 +65,10 @@ contract RewardDistribution is
     event RewardsClaimed(address indexed account, uint256 amount);
     event RewardsLocked(address indexed account);
     event RewardsUnlocked(address indexed account);
-    event RewardsDistributed(uint256 amount);
+    event RewardsDistributed(bytes32 distributionId, uint256 amount);
+    event ShareholderRemoved(address indexed account);
 
-    function initialize(address _rewardToken, uint256 _distributionInterval) public initializer {
+    function initialize(address _rewardToken) public initializer {
         __Ownable_init(msg.sender);
         __AccessControl_init();
         __ReentrancyGuard_init();
@@ -75,9 +78,8 @@ contract RewardDistribution is
         _grantRole(ADMIN_ROLE, msg.sender);
 
         require(_rewardToken != address(0), "Invalid reward token address");
-        rewardToken = IERC20(_rewardToken);
+        rewardToken = ERC20Upgradeable(_rewardToken);
 
-        distributionInterval = _distributionInterval;
         lastDistributionTime = block.timestamp;
 
         // Initialize totalShares to 1e18 representing 100%
@@ -85,13 +87,34 @@ contract RewardDistribution is
     }
 
     // === 1. Allocate Shares ===
+    /**
+     * @notice Allocates shares to a shareholder.
+     *
+     * @param account The address of the shareholder.
+     * @param shares The number of shares to allocate.
+     *
+     * Requirements:
+     * - `account` cannot be the zero address.
+     * - `shares` must be greater than zero.
+     * - Total shares after allocation must not exceed `SCALE`.
+     *
+     * Emits a {SharesAllocated} event.
+     */
     function allocateShares(address account, uint256 shares) external onlyRole(ADMIN_ROLE) whenNotPaused {
         require(account != address(0), "Invalid account address");
         require(shares > 0, "Shares must be greater than zero");
-        require(totalShares + shares <= SCALE, "Total shares exceed 100%");
+        require(totalShares + shares <= SCALE, "Total shares exceed maximum");
+
+        Shareholder storage shareholder = shareholders[account];
+
+        if (shareholder.shares == 0) {
+            // New shareholder, add to the array
+            bool added = shareholderAddresses.add(account);
+            require(added, "RewardDistribution: shareholder already exists");
+            shareholder.isActivated = true;
+        }
 
         // Add shares to the shareholder and update total shares
-        Shareholder storage shareholder = shareholders[account];
         shareholder.shares += shares;
         totalShares += shares;
 
@@ -99,23 +122,48 @@ contract RewardDistribution is
     }
 
     // === 2. Adjust Shares ===
-    function adjustShares(address account, uint256 newShares) external onlyRole(ADMIN_ROLE) whenNotPaused {
-        require(account != address(0), "Invalid account address");
-        require(newShares > 0, "Shares must be greater than zero");
+    /**
+     * @notice Updates the shares of a shareholder.
+     *
+     * @param account The address of the shareholder.
+     * @param newShares The new number of shares to allocate.
+     *
+     * Requirements:
+     * - `account` cannot be the zero address.
+     * - `newShares` must not cause `totalShares` to exceed `SCALE`.
+     */
+    function updateShareholderShares(address account, uint256 newShares) external onlyRole(ADMIN_ROLE) whenNotPaused {
+        // === Checks ===
+        require(account != address(0), "RewardDistribution: invalid account address");
 
         Shareholder storage shareholder = shareholders[account];
-        require(shareholder.shares > 0, "Account has no shares");
-
         uint256 oldShares = shareholder.shares;
 
-        // Calculate new total shares
+        // Calculate new total shares and validate
         uint256 updatedTotalShares = totalShares - oldShares + newShares;
-        require(updatedTotalShares <= SCALE, "Total shares exceed 100%");
+        require(updatedTotalShares <= SCALE, "RewardDistribution: total shares exceed maximum");
 
-        // Update shares
+        // === Effects ===
+        if (oldShares == 0 && newShares > 0) {
+            // New shareholder, add to the array
+            bool added = shareholderAddresses.add(account);
+            require(added, "RewardDistribution: shareholder already exists");
+            shareholder.isActivated = true;
+        }
+
+        // Update shares and totalShares
         shareholder.shares = newShares;
         totalShares = updatedTotalShares;
 
+        // Handle deactivation and removal
+        if (newShares == 0 && oldShares > 0) {
+            bool removed = shareholderAddresses.remove(account);
+            require(removed, "RewardDistribution: failed to remove shareholder");
+            shareholder.isActivated = false;
+            emit ShareholderRemoved(account);
+        }
+
+        // === Interactions ===
         emit SharesAdjusted(account, oldShares, newShares);
     }
 
@@ -149,27 +197,51 @@ contract RewardDistribution is
      * - Caller must have shares allocated.
      * - There must be claimable rewards available.
      */
-    function claimRewards() external nonReentrant whenNotPaused {
+    function claimRewards(bytes32 distributionId) external nonReentrant whenNotPaused {
+        Distribution storage distribution = distributions[distributionId];
+        require(!distribution.claimed[msg.sender], "Rewards already claimed for this distribution");
         require(!rewardsLocked[msg.sender], "Rewards are locked for this user");
 
-        Shareholder storage shares = shareholders[msg.sender];
-        require(shares.shares > 0, "No shares assigned to user");
+        Shareholder storage shareholder = shareholders[msg.sender];
+        require(shareholder.shares > 0, "No shares assigned");
 
-        // Calculate user's share proportion (scaled by SCALE)
-        uint256 contractBalance = rewardToken.balanceOf(address(this));
-        uint256 userShareAmount = (shares.shares * contractBalance) / SCALE;
+        // Calculate the user's share of the rewards
+        uint256 userShareAmount = (shareholder.shares * distribution.totalRewards) / SCALE;
 
-        // Calculate claimable rewards
-        uint256 pendingRewards = userShareAmount - shares.rewardDebt;
-        require(pendingRewards > 0, "No rewards available for claim");
+        // Mark rewards as claimed for this distribution
+        distribution.claimed[msg.sender] = true;
 
-        // Update reward debt
-        shares.rewardDebt += pendingRewards;
+        // Transfer tokens to the user
+        rewardToken.safeTransfer(msg.sender, userShareAmount);
 
-        // Transfer rewards to the user
-        rewardToken.safeTransfer(msg.sender, pendingRewards);
+        emit RewardsClaimed(msg.sender, userShareAmount);
+    }
 
-        emit RewardsClaimed(msg.sender, pendingRewards);
+    function claimAllRewards() external nonReentrant whenNotPaused {
+        require(!rewardsLocked[msg.sender], "Rewards are locked for this user");
+
+        Shareholder storage shareholder = shareholders[msg.sender];
+        require(shareholder.shares > 0, "No shares assigned");
+
+        uint256 totalClaimableRewards = 0;
+
+        for (uint256 i = 0; i < shareholderAddresses.length(); i++) {
+            bytes32 distributionId = keccak256(abi.encodePacked(i)); // Assuming unique distribution IDs
+            Distribution storage distribution = distributions[distributionId];
+
+            if (!distribution.claimed[msg.sender]) {
+                uint256 userShareAmount = (shareholder.shares * distribution.totalRewards) / SCALE;
+                distribution.claimed[msg.sender] = true; // Mark as claimed
+                totalClaimableRewards += userShareAmount;
+            }
+        }
+
+        require(totalClaimableRewards > 0, "No rewards available to claim");
+
+        // Transfer all claimable rewards in a single transaction
+        rewardToken.safeTransfer(msg.sender, totalClaimableRewards);
+
+        emit RewardsClaimed(msg.sender, totalClaimableRewards);
     }
 
     // === Lock/Unlock Rewards ===
@@ -205,20 +277,34 @@ contract RewardDistribution is
     }
 
     // Reward Distribution Schedule
-    function distributeRewards(uint256 amount) external onlyRole(ADMIN_ROLE) {
-        require(block.timestamp >= lastDistributionTime + distributionInterval, "Distribution interval not reached");
-        require(amount > 0, "Invalid reward amount");
 
-        // Transfer the reward tokens to the contract
-        rewardToken.safeTransferFrom(msg.sender, address(this), amount);
+    /**
+     * @notice Creates a new reward distribution with the specified total rewards and distribution time.
+     * @param totalRewards The total amount of rewards to be distributed.
+     * @param distributionTime The time when the rewards will be distributed.
+     *
+     * Requirements:
+     * - Only accounts with ADMIN_ROLE can call.
+     * - The contract must not be paused.
+     * - The `totalRewards` parameter must be greater than zero.
+     * - The `distributionTime` parameter must be in the future.
+     * - The contract must have sufficient funds to cover the reward distribution.
+     */
+    function createDistribution(uint256 totalRewards, uint256 distributionTime)
+        external
+        onlyRole(ADMIN_ROLE)
+        whenNotPaused
+    {
+        require(totalRewards > 0, "Invalid reward amount");
+        require(distributionTime > block.timestamp, "Distribution time must be in the future");
+        require(rewardToken.balanceOf(address(this)) >= totalRewards, "Insufficient funds");
 
-        // Update the total rewards
-        totalRewards += amount;
+        bytes32 distributionId = keccak256(abi.encodePacked(totalRewards, distributionTime, block.timestamp));
 
-        // Update the last distribution time
-        lastDistributionTime = block.timestamp;
+        distributions[distributionId].totalRewards = totalRewards;
+        distributions[distributionId].distributionTime = distributionTime;
 
-        emit RewardsDistributed(amount);
+        emit RewardsDistributed(distributionId, totalRewards);
     }
 
     // === Pause Functions ===
@@ -241,28 +327,5 @@ contract RewardDistribution is
      */
     function unpause() external onlyRole(ADMIN_ROLE) {
         _unpause();
-    }
-
-    // === View Functions ===
-
-    /**
-     * @notice Calculates the pending rewards for a user.
-     * @param account The address to query rewards for.
-     * @return The amount of pending rewards.
-     */
-    function getPendingRewards(address account) external view returns (uint256) {
-        Shareholder storage shares = shareholders[account];
-        if (shares.shares == 0) {
-            return 0;
-        }
-        uint256 contractBalance = rewardToken.balanceOf(address(this));
-        uint256 userShareAmount = (shares.shares * contractBalance) / SCALE;
-        return userShareAmount - shares.rewardDebt;
-    }
-
-    // Admin Functions
-    function setDistributionInterval(uint256 interval) external onlyRole(ADMIN_ROLE) {
-        require(interval > 0, "Invalid interval");
-        distributionInterval = interval;
     }
 }

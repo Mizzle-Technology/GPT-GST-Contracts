@@ -2,7 +2,6 @@
 pragma solidity ^0.8.28;
 
 import "@chainlink/shared/interfaces/AggregatorV3Interface.sol";
-import "forge-std/console.sol";
 
 library PriceCalculator {
     uint256 public constant MAX_PRICE_AGE = 1 hours;
@@ -16,7 +15,7 @@ library PriceCalculator {
      * @param tokensPerTroyOunce The number of GPT tokens that represent one troy ounce of gold.
      * @return tokenAmount The required amount of payment tokens.
      */
-    function calculateTokenAmount(
+    function calculatePaymentTokenAmount(
         int256 goldPrice,
         int256 tokenPrice,
         uint256 gptAmount,
@@ -66,4 +65,21 @@ library PriceCalculator {
         require(tokenPrice > 0, "Invalid token price from feed");
         require(tokenUpdatedAt >= minAllowedTimestamp, "Token price data is stale");
     }
+
+    /**
+     * @dev Calculates the required GPT token amount for purchasing GPT tokens.
+     * @param goldPrice The current price of gold per troy ounce (8 decimals).
+     * @param tokenPrice The current price of the payment token in USD (8 decimals).
+     * @param paymentTokenAmount The amount of GPT tokens to purchase.
+     * @param tokenDecimals The number of decimals the payment token uses.
+     * @param tokensPerTroyOunce The number of GPT tokens that represent one troy ounce of gold.
+     * @return gptAmount The required amount of payment tokens.
+     */
+    function calculateGptTokenAmount(
+        int256 goldPrice,
+        int256 tokenPrice,
+        uint256 paymentTokenAmount,
+        uint8 tokenDecimals,
+        uint256 tokensPerTroyOunce
+    ) public returns (uint256 gptAmount) {}
 }

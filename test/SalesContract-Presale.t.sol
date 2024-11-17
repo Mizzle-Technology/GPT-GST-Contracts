@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import "../src/tokens/GoldPackToken.sol";
+import "../src/sales/ISalesContract.sol";
 import "../src/sales/SalesContract.sol";
 import "../src/vault/BurnVault.sol";
 import "../src/vault/TradingVault.sol";
@@ -34,7 +35,7 @@ contract SalesContractPresaleTest is Test {
     uint256 private userPrivateKey;
     uint256 private relayerPrivateKey;
 
-    SalesContract.Order private order;
+    ISalesContract.Order private order;
 
     function setUp() public {
         // Deploy mock tokens and price feeds
@@ -88,12 +89,12 @@ contract SalesContractPresaleTest is Test {
 
         vm.startPrank(sales);
         salesContract.addToWhitelist(user);
-        salesContract.setSaleStage(SalesContract.SaleStage.PublicSale);
+        salesContract.setSaleStage(ISalesContract.SaleStage.PublicSale);
         vm.stopPrank();
 
         // Set up the order object
 
-        order = SalesContract.Order({
+        order = ISalesContract.Order({
             roundId: salesContract.currentRoundId(),
             buyer: user,
             gptAmount: 10_000_000000, // 1 troy ounce worth of GPT tokens
@@ -114,7 +115,7 @@ contract SalesContractPresaleTest is Test {
     function testNotWhitelisted() public {
         // Set up the order object
         vm.startPrank(sales);
-        salesContract.setSaleStage(SalesContract.SaleStage.PreSale);
+        salesContract.setSaleStage(ISalesContract.SaleStage.PreSale);
         salesContract.removeFromWhitelist(user);
         vm.stopPrank();
 
@@ -126,7 +127,7 @@ contract SalesContractPresaleTest is Test {
     function testBuyerMismatch() public {
         // Set up the order object
         vm.startPrank(sales);
-        salesContract.setSaleStage(SalesContract.SaleStage.PreSale);
+        salesContract.setSaleStage(ISalesContract.SaleStage.PreSale);
         salesContract.addToWhitelist(user2);
         vm.stopPrank();
 
@@ -137,7 +138,7 @@ contract SalesContractPresaleTest is Test {
 
     function testInvalidUserSignature() public {
         vm.prank(sales);
-        salesContract.setSaleStage(SalesContract.SaleStage.PreSale);
+        salesContract.setSaleStage(ISalesContract.SaleStage.PreSale);
 
         // Generate a valid user signature and then modify it to be invalid
         bytes32 userDigest = _getUserDigest(order);
@@ -154,7 +155,7 @@ contract SalesContractPresaleTest is Test {
 
         // Approve USDC transfer
         vm.prank(user);
-        usdc.approve(address(salesContract), 2000 * 10 ** 6); // Approve 2000 USDC (with 6 decimals)
+        usdc.approve(address(tradingVault), 2000 * 10 ** 6); // Approve 2000 USDC (with 6 decimals)
 
         vm.prank(user);
         vm.expectRevert("Invalid user signature");
@@ -163,7 +164,7 @@ contract SalesContractPresaleTest is Test {
 
     function testFailInvalidRelayerSignature() public {
         vm.prank(sales);
-        salesContract.setSaleStage(SalesContract.SaleStage.PreSale);
+        salesContract.setSaleStage(ISalesContract.SaleStage.PreSale);
 
         vm.prank(user);
         salesContract.preSalePurchase(order);
@@ -171,7 +172,7 @@ contract SalesContractPresaleTest is Test {
 
     function testSuccessfulPurchase() public {
         vm.prank(sales);
-        salesContract.setSaleStage(SalesContract.SaleStage.PreSale);
+        salesContract.setSaleStage(ISalesContract.SaleStage.PreSale);
 
         usdc.mint(user, 2000 * 10 ** 6); // Mint 2000 USDC to user
 
@@ -192,8 +193,9 @@ contract SalesContractPresaleTest is Test {
         order.relayerSignature = abi.encodePacked(r, s, v);
 
         // Approve USDC transfer
-        vm.prank(user);
+        vm.startPrank(user);
         usdc.approve(address(salesContract), 2000 * 10 ** 6); // Approve 2000 USDC (with 6 decimals)
+        vm.stopPrank();
 
         vm.prank(user);
         salesContract.preSalePurchase(order);
@@ -205,7 +207,7 @@ contract SalesContractPresaleTest is Test {
         assertEq(salesContract.nonces(user), 1);
     }
 
-    function _getUserDigest(SalesContract.Order memory userOrder) internal view returns (bytes32) {
+    function _getUserDigest(ISalesContract.Order memory userOrder) internal view returns (bytes32) {
         bytes32 structHash = keccak256(
             abi.encode(
                 salesContract.USER_ORDER_TYPEHASH(),
@@ -222,7 +224,7 @@ contract SalesContractPresaleTest is Test {
         return keccak256(abi.encodePacked("\x19\x01", salesContract.DOMAIN_SEPARATOR(), structHash));
     }
 
-    function _getRelayerDigest(SalesContract.Order memory relayerOrder) internal view returns (bytes32) {
+    function _getRelayerDigest(ISalesContract.Order memory relayerOrder) internal view returns (bytes32) {
         bytes32 structHash = keccak256(
             abi.encode(
                 salesContract.RELAYER_ORDER_TYPEHASH(),

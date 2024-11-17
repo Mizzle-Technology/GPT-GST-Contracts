@@ -17,6 +17,7 @@ import "@chainlink/shared/interfaces/AggregatorV3Interface.sol";
 import "../tokens/GoldPackToken.sol";
 import "../libs/PriceCalculator.sol";
 import "../vault/TradingVault.sol";
+import "./ISalesContract.sol";
 
 /**
  * @title SalesContract
@@ -32,7 +33,8 @@ contract SalesContract is
     AccessControlUpgradeable,
     ReentrancyGuardUpgradeable,
     PausableUpgradeable,
-    UUPSUpgradeable
+    UUPSUpgradeable,
+    ISalesContract
 {
     using SafeERC20 for ERC20Upgradeable;
     using PriceCalculator for *;
@@ -73,55 +75,6 @@ contract SalesContract is
     mapping(address => bool) public whitelistedAddresses;
     mapping(address => uint256) public nonces;
     mapping(bytes32 => uint256) public timelockExpiries;
-
-    // === Structs and Enums ===
-    struct TokenConfig {
-        bool isAccepted;
-        AggregatorV3Interface priceFeed;
-        uint8 decimals;
-    }
-
-    struct Round {
-        uint256 maxTokens;
-        uint256 tokensSold;
-        bool isActive;
-        uint256 startTime;
-        uint256 endTime;
-    }
-
-    enum SaleStage {
-        PreMarketing,
-        PreSale,
-        PublicSale,
-        SaleEnded
-    }
-
-    struct Order {
-        uint256 roundId;
-        address buyer;
-        uint256 gptAmount;
-        uint256 nonce;
-        uint256 expiry;
-        address paymentToken;
-        bytes userSignature;
-        bytes relayerSignature;
-    }
-
-    // === Events ===
-    event TokensPurchased(
-        address indexed buyer, uint256 amount, uint256 tokenSpent, address indexed paymentToken, bool isPresale
-    );
-    event RoundCreated(uint256 indexed roundId, uint256 maxTokens, uint256 startTime, uint256 endTime);
-    event RoundActivated(uint256 indexed roundId);
-    event RoundDeactivated(uint256 indexed roundId);
-    event TrustedSignerUpdated(address indexed oldSigner, address indexed newSigner);
-    event PriceAgeUpdated(uint256 oldAge, uint256 newAge);
-    event Paused(address indexed pauser, uint256 timestamp);
-    event Unpaused(address indexed unpauser, uint256 timestamp);
-    event TokenRecovered(address indexed token, uint256 amount, address indexed recipient);
-    event ETHRecovered(uint256 amount, address indexed recipient);
-    event AddressWhitelisted(address indexed addr);
-    event AddressRemoved(address indexed addr);
 
     // === Constructor ===
 
@@ -373,7 +326,7 @@ contract SalesContract is
 
         (int256 goldPrice, int256 tokenPrice) = PriceCalculator.getLatestPrices(goldPriceFeed, config.priceFeed);
 
-        tokenAmount = PriceCalculator.calculateTokenAmount(
+        tokenAmount = PriceCalculator.calculatePaymentTokenAmount(
             goldPrice, tokenPrice, gptAmount, config.decimals, TOKENS_PER_TROY_OUNCE
         );
     }
@@ -403,6 +356,10 @@ contract SalesContract is
         require(token != address(gptToken), "Cannot recover GPT token");
         require(amount > 0, "Amount must be greater than 0");
         require(ERC20Upgradeable(token).balanceOf(address(this)) >= amount, "Insufficient balance");
+
+        // check allowance
+        uint256 allowance = ERC20Upgradeable(token).allowance(address(this), msg.sender);
+        require(allowance >= amount, "Token allowance too low");
 
         ERC20Upgradeable(token).safeTransfer(msg.sender, amount);
         emit TokenRecovered(token, amount, msg.sender);
@@ -478,6 +435,10 @@ contract SalesContract is
         // Check if the buyer has enough balance
         uint256 userBalance = ERC20Upgradeable(paymentToken).balanceOf(buyer);
         require(userBalance >= tokenAmount, "Insufficient balance");
+
+        // Ensure the contract has the required allowance
+        uint256 allowance = ERC20Upgradeable(paymentToken).allowance(buyer, address(this));
+        require(allowance >= tokenAmount, "Token allowance too low");
 
         // Transfer tokens to the contract
         ERC20Upgradeable(paymentToken).safeTransferFrom(buyer, address(tradingVault), tokenAmount);
