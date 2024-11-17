@@ -10,7 +10,9 @@ all: compile deploy test
 # Compile contracts
 compile:
 	@echo "Compiling contracts..."
-	$(FORGE) clean && $(FORGE) build
+	$(FORGE) clean
+	$(FORGE) build
+	$(FORGE) fmt
 
 # Deploy contracts
 deploy: compile

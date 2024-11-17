@@ -5,9 +5,10 @@ import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import "../vault/TradingVault.sol";
 
@@ -23,6 +24,7 @@ contract RewardDistribution is
     AccessControlUpgradeable,
     ReentrancyGuardUpgradeable,
     OwnableUpgradeable,
+    UUPSUpgradeable,
     PausableUpgradeable
 {
     using SafeERC20 for ERC20Upgradeable;
@@ -46,6 +48,7 @@ contract RewardDistribution is
     }
 
     uint256 public totalShares; // total shares allocated
+    uint256[50] private __gap; // gap for upgrade safety
     ERC20Upgradeable public rewardToken; // reward token
     EnumerableSet.AddressSet private shareholderAddresses; // total number of shareholders
 
@@ -73,6 +76,7 @@ contract RewardDistribution is
         __AccessControl_init();
         __ReentrancyGuard_init();
         __Pausable_init();
+        __UUPSUpgradeable_init();
 
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(ADMIN_ROLE, msg.sender);
@@ -328,4 +332,7 @@ contract RewardDistribution is
     function unpause() external onlyRole(ADMIN_ROLE) {
         _unpause();
     }
+
+    // === Upgradeability ===
+    function _authorizeUpgrade(address newImplementation) internal override onlyRole(ADMIN_ROLE) {}
 }
