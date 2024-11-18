@@ -60,9 +60,10 @@ contract TradingVaultTest is Test {
         gptToken = new GoldPackToken();
         gptToken.initialize(superAdmin, admin, sales, address(burnVault));
 
-        // Deploy TradingVault
+        // Initialize TradingVault with supported tokens
         tradingVault = new TradingVault();
         tradingVault.initialize(safeWallet, admin, superAdmin);
+
         vm.stopPrank();
     }
 

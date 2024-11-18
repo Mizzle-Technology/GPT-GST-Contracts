@@ -12,6 +12,7 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import "../vault/TradingVault.sol";
 import "./IRewardDistribution.sol";
+import "../libs/LinkedMap.sol";
 
 /**
  * @title RewardDistribution
@@ -31,6 +32,8 @@ contract RewardDistribution is
 {
     using SafeERC20 for ERC20Upgradeable;
     using EnumerableSet for EnumerableSet.AddressSet;
+    using EnumerableSet for EnumerableSet.Bytes32Set;
+    using LinkedMap for LinkedMap.LinkedList;
 
     // === constants ===
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
@@ -44,6 +47,7 @@ contract RewardDistribution is
     }
 
     struct Distribution {
+        address rewardToken; // Token used for rewards
         uint256 totalRewards; // Total rewards in this distribution
         uint256 distributionTime; // Time when rewards become claimable
         mapping(address => bool) claimed; // Tracks whether a shareholder has claimed their reward
@@ -51,30 +55,28 @@ contract RewardDistribution is
 
     uint256 public totalShares; // total shares allocated
     uint256[50] private __gap; // gap for upgrade safety
-    ERC20Upgradeable public rewardToken; // reward token
     EnumerableSet.AddressSet private shareholderAddresses; // total number of shareholders
+    EnumerableSet.AddressSet private rewardTokens; // reward tokens
+    LinkedMap.LinkedList private distributionList; // List of distributions
 
     // Mapping to store shareholders and their shares
     mapping(address => Shareholder) public shareholders;
-    mapping(address => uint256) public rewardsClaimed; // User => Total claimed rewards
     mapping(address => bool) public rewardsLocked; // User => Whether rewards are locked
-    mapping(bytes32 => Distribution) public distributions; // Distribution ID => Distribution details
+    mapping(address => bool) public supportTokens; // Support tokens
+    mapping(bytes32 => Distribution) public distributions; // Distribution ID => Distribution
 
     // Reward schedule variables
     uint256 public lastDistributionTime;
 
-    function initialize(address _rewardToken, address _admin) public initializer {
+    function initialize(address _admin, address _super) public initializer {
         __Ownable_init(msg.sender);
         __AccessControl_init();
         __ReentrancyGuard_init();
         __Pausable_init();
         __UUPSUpgradeable_init();
 
-        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(DEFAULT_ADMIN_ROLE, _super);
         _grantRole(ADMIN_ROLE, _admin);
-
-        require(_rewardToken != address(0), "Invalid reward token address");
-        rewardToken = ERC20Upgradeable(_rewardToken);
 
         lastDistributionTime = block.timestamp;
 
@@ -168,6 +170,45 @@ contract RewardDistribution is
         emit SharesAdjusted(account, oldShares, newShares);
     }
 
+    // === Support Tokens ===
+
+    /**
+     * @notice Adds a new reward token to the contract.
+     * @param token The address of the reward token.
+     *
+     * Requirements:
+     * - Only accounts with ADMIN_ROLE can call.
+     * - The token address must not be the zero address.
+     * - The token must not already be supported.
+     */
+    function addRewardToken(address token) external override onlyRole(ADMIN_ROLE) {
+        require(token != address(0), "Invalid token address");
+        require(!supportTokens[token], "Token already supported");
+
+        rewardTokens.add(token);
+        supportTokens[token] = true;
+
+        emit RewardTokenAdded(token);
+    }
+
+    /**
+     * @notice Removes a reward token from the contract.
+     * @param token The address of the reward token.
+     *
+     * Requirements:
+     * - Only accounts with ADMIN_ROLE can call.
+     * - The token must be supported.
+     */
+    function removeRewardToken(address token) external override onlyRole(ADMIN_ROLE) {
+        require(address(token) != address(0), "Invalid token address");
+        require(supportTokens[token], "Token not supported");
+
+        rewardTokens.remove(token);
+        supportTokens[token] = false;
+
+        emit RewardTokenRemoved(token);
+    }
+
     // === Rewards Management ===
 
     /**
@@ -181,11 +222,18 @@ contract RewardDistribution is
      * require The function is protected against reentrancy attacks.
      * emit RewardToppedUp Emitted when the reward pool is successfully topped up with the specified amount.
      */
-    function topUpRewards(uint256 amount) external onlyRole(ADMIN_ROLE) whenNotPaused nonReentrant {
+    function topUpRewards(uint256 amount, address token)
+        external
+        override
+        onlyRole(ADMIN_ROLE)
+        whenNotPaused
+        nonReentrant
+    {
         require(amount > 0, "Amount must be greater than zero");
+        require(supportTokens[token], "Token not supported");
 
         // Transfer reward tokens from the admin to the contract
-        rewardToken.safeTransferFrom(msg.sender, address(this), amount);
+        ERC20Upgradeable(token).safeTransferFrom(msg.sender, address(this), amount);
 
         emit RewardToppedUp(amount);
     }
@@ -198,51 +246,45 @@ contract RewardDistribution is
      * - Caller must have shares allocated.
      * - There must be claimable rewards available.
      */
-    function claimRewards(bytes32 distributionId) external override nonReentrant whenNotPaused {
+    function claimReward(bytes32 distributionId) external override nonReentrant whenNotPaused {
         Distribution storage distribution = distributions[distributionId];
         require(!distribution.claimed[msg.sender], "Rewards already claimed for this distribution");
-        require(!rewardsLocked[msg.sender], "Rewards are locked for this user");
+        require(block.timestamp >= distribution.distributionTime, "Rewards not yet claimable");
 
         Shareholder storage shareholder = shareholders[msg.sender];
+        require(shareholder.isActivated, "Shareholder not activated");
+        require(!shareholder.isLocked, "Shareholder is locked");
         require(shareholder.shares > 0, "No shares assigned");
 
-        // Calculate the user's share of the rewards
-        uint256 userShareAmount = (shareholder.shares * distribution.totalRewards) / SCALE;
-
-        // Mark rewards as claimed for this distribution
+        uint256 rewardAmount = (distribution.totalRewards * shareholder.shares) / SCALE;
         distribution.claimed[msg.sender] = true;
 
-        // Transfer tokens to the user
-        rewardToken.safeTransfer(msg.sender, userShareAmount);
+        ERC20Upgradeable rewardToken = ERC20Upgradeable(distribution.rewardToken);
+        rewardToken.safeTransfer(msg.sender, rewardAmount);
 
-        emit RewardsClaimed(msg.sender, userShareAmount);
+        emit RewardsClaimed(msg.sender, rewardAmount, distribution.rewardToken, distributionId);
     }
 
     function claimAllRewards() external override nonReentrant whenNotPaused {
-        require(!rewardsLocked[msg.sender], "Rewards are locked for this user");
-
         Shareholder storage shareholder = shareholders[msg.sender];
-        require(shareholder.shares > 0, "No shares assigned");
+        require(shareholder.isActivated, "Shareholder not activated");
+        require(!shareholder.isLocked, "Shareholder is locked");
 
-        uint256 totalClaimableRewards = 0;
+        bytes32 currentId = distributionList.getHead();
 
-        for (uint256 i = 0; i < shareholderAddresses.length(); i++) {
-            bytes32 distributionId = keccak256(abi.encodePacked(i)); // Assuming unique distribution IDs
-            Distribution storage distribution = distributions[distributionId];
+        while (currentId != bytes32(0)) {
+            Distribution storage distribution = distributions[currentId];
+            if (!distribution.claimed[msg.sender] && block.timestamp >= distribution.distributionTime) {
+                uint256 rewardAmount = (distribution.totalRewards * shareholder.shares) / SCALE;
+                distribution.claimed[msg.sender] = true;
 
-            if (!distribution.claimed[msg.sender]) {
-                uint256 userShareAmount = (shareholder.shares * distribution.totalRewards) / SCALE;
-                distribution.claimed[msg.sender] = true; // Mark as claimed
-                totalClaimableRewards += userShareAmount;
+                ERC20Upgradeable rewardToken = ERC20Upgradeable(distribution.rewardToken);
+                rewardToken.safeTransfer(msg.sender, rewardAmount);
+
+                emit RewardsClaimed(msg.sender, rewardAmount, distribution.rewardToken, currentId);
             }
+            currentId = distributionList.next(currentId);
         }
-
-        require(totalClaimableRewards > 0, "No rewards available to claim");
-
-        // Transfer all claimable rewards in a single transaction
-        rewardToken.safeTransfer(msg.sender, totalClaimableRewards);
-
-        emit RewardsClaimed(msg.sender, totalClaimableRewards);
     }
 
     // === Lock/Unlock Rewards ===
@@ -291,7 +333,7 @@ contract RewardDistribution is
      * - The `distributionTime` parameter must be in the future.
      * - The contract must have sufficient funds to cover the reward distribution.
      */
-    function createDistribution(uint256 totalRewards, uint256 distributionTime)
+    function createDistribution(address token, uint256 totalRewards, uint256 distributionTime)
         external
         override
         onlyRole(ADMIN_ROLE)
@@ -299,12 +341,18 @@ contract RewardDistribution is
     {
         require(totalRewards > 0, "Invalid reward amount");
         require(distributionTime > block.timestamp, "Distribution time must be in the future");
+
+        ERC20Upgradeable rewardToken = ERC20Upgradeable(token);
         require(rewardToken.balanceOf(address(this)) >= totalRewards, "Insufficient funds");
 
         bytes32 distributionId = keccak256(abi.encodePacked(totalRewards, distributionTime, block.timestamp));
 
         distributions[distributionId].totalRewards = totalRewards;
         distributions[distributionId].distributionTime = distributionTime;
+        distributions[distributionId].rewardToken = token;
+
+        // Add distribution to the linked list
+        distributionList.add(distributionId);
 
         emit RewardsDistributed(distributionId, totalRewards);
     }
