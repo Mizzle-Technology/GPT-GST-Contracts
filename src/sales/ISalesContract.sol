@@ -69,9 +69,6 @@ interface ISalesContract {
     function preSalePurchase(Order calldata order) external;
     function authorizePurchase(Order calldata order) external;
 
-    // === Price Calculation ===
-    function calculatePrice(address paymentToken, uint256 gptAmount) external view returns (uint256 tokenAmount);
-
     // === Emergency Functions ===
     function pause() external;
     function unpause() external;

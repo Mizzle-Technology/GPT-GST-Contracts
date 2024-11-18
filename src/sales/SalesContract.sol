@@ -15,7 +15,7 @@ import "@chainlink/shared/interfaces/AggregatorV3Interface.sol";
 
 // Local imports
 import "../tokens/GoldPackToken.sol";
-import "../libs/PriceCalculator.sol";
+import "../libs/SalesLib.sol";
 import "../vault/TradingVault.sol";
 import "./ISalesContract.sol";
 
@@ -37,7 +37,7 @@ contract SalesContract is
     ISalesContract
 {
     using SafeERC20 for ERC20Upgradeable;
-    using PriceCalculator for *;
+    using SalesLib for *;
 
     // === Constants ===
     uint256 public constant TOKENS_PER_TROY_OUNCE = 10_000_000000; // 10,000 GPT tokens with 6 decimals
@@ -124,7 +124,11 @@ contract SalesContract is
      * @param priceFeed Address of the Chainlink price feed for the token
      * @param decimals Number of decimals the token uses
      */
-    function addAcceptedToken(address token, address priceFeed, uint8 decimals) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function addAcceptedToken(address token, address priceFeed, uint8 decimals)
+        external
+        override
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
         require(token != address(0), "Invalid token address");
         acceptedTokens[token] =
             TokenConfig({isAccepted: true, priceFeed: AggregatorV3Interface(priceFeed), decimals: decimals});
@@ -146,7 +150,11 @@ contract SalesContract is
      * @param startTime Start time of the round
      * @param endTime End time of the round
      */
-    function createRound(uint256 maxTokens, uint256 startTime, uint256 endTime) external onlyRole(SALES_MANAGER_ROLE) {
+    function createRound(uint256 maxTokens, uint256 startTime, uint256 endTime)
+        external
+        override
+        onlyRole(SALES_MANAGER_ROLE)
+    {
         require(startTime < endTime, "Invalid round time");
         currentRoundId = nextRoundId;
         rounds[currentRoundId] =
@@ -159,7 +167,7 @@ contract SalesContract is
      * @notice Activates a sale round
      * @param roundId ID of the round to activate
      */
-    function activateRound(uint256 roundId) external onlyRole(SALES_MANAGER_ROLE) {
+    function activateRound(uint256 roundId) external override onlyRole(SALES_MANAGER_ROLE) {
         require(roundId < nextRoundId, "Round does not exist");
         Round storage round = rounds[roundId];
         require(!round.isActive, "Round already active");
@@ -174,7 +182,7 @@ contract SalesContract is
      * @notice Deactivates a sale round
      * @param roundId ID of the round to deactivate
      */
-    function deactivateRound(uint256 roundId) external onlyRole(SALES_MANAGER_ROLE) {
+    function deactivateRound(uint256 roundId) external override onlyRole(SALES_MANAGER_ROLE) {
         require(roundId < nextRoundId, "Round does not exist");
         Round storage round = rounds[roundId];
         require(round.isActive, "Round not active");
@@ -188,7 +196,7 @@ contract SalesContract is
      * @notice Sets the current sale stage
      * @param _stage The new sale stage
      */
-    function setSaleStage(SaleStage _stage) external onlyRole(SALES_MANAGER_ROLE) {
+    function setSaleStage(SaleStage _stage) external override onlyRole(SALES_MANAGER_ROLE) {
         currentStage = _stage;
     }
 
@@ -197,27 +205,35 @@ contract SalesContract is
      * @notice Allows a whitelisted address to make a purchase during the presale stage.
      * @param order The amount of tokens to purchase.
      */
-    function preSalePurchase(Order calldata order) external nonReentrant whenNotPaused {
+    function preSalePurchase(Order calldata order) external override nonReentrant whenNotPaused {
         require(currentStage == SaleStage.PreSale, "Presale not active");
         require(whitelistedAddresses[msg.sender], "Not whitelisted");
         require(order.buyer == msg.sender, "Buyer mismatch"); // Added buyer verification
 
-        // Signature verifications
-        require(
-            _verifyUserSignature(
+        // Compute user order hash
+        bytes32 userOrderHash = keccak256(
+            abi.encode(
+                USER_ORDER_TYPEHASH,
                 order.roundId,
                 order.buyer,
                 order.gptAmount,
                 order.nonce,
                 order.expiry,
                 order.paymentToken,
-                order.userSignature
-            ),
+                chainId
+            )
+        );
+
+        // Verify user signature using SalesLib
+        require(
+            SalesLib.verifyUserSignature(DOMAIN_SEPARATOR, userOrderHash, order.buyer, order.userSignature),
             "Invalid user signature"
         );
 
-        require(
-            _verifyRelayerSignature(
+        // Compute relayer order hash
+        bytes32 relayerOrderHash = keccak256(
+            abi.encode(
+                RELAYER_ORDER_TYPEHASH,
                 order.roundId,
                 order.buyer,
                 order.gptAmount,
@@ -225,12 +241,33 @@ contract SalesContract is
                 order.expiry,
                 order.paymentToken,
                 order.userSignature,
-                order.relayerSignature
-            ),
+                chainId
+            )
+        );
+
+        // Verify relayer signature using SalesLib
+        require(
+            SalesLib.verifyRelayerSignature(DOMAIN_SEPARATOR, relayerOrderHash, trustedSigner, order.relayerSignature),
             "Invalid relayer signature"
         );
 
-        _processPurchase(order.roundId, order.gptAmount, order.paymentToken, order.buyer, true);
+        // Fetch the current round
+        ISalesContract.Round storage currentRound = rounds[order.roundId];
+        require(currentRound.isActive, "Round is not active");
+        TokenConfig storage tokenConfig = acceptedTokens[order.paymentToken];
+
+        // Process the purchase using SalesLib
+        SalesLib.processPurchase(
+            goldPriceFeed,
+            tokenConfig,
+            tradingVault,
+            gptToken,
+            currentRound,
+            order.gptAmount,
+            order.paymentToken,
+            order.buyer,
+            TOKENS_PER_TROY_OUNCE
+        );
 
         nonces[order.buyer]++;
     }
@@ -239,28 +276,35 @@ contract SalesContract is
      * @notice Allows an authorized purchase during the public sale stage using a signature.
      * @param order The order struct containing the purchase details.
      */
-    function authorizePurchase(Order calldata order) external nonReentrant whenNotPaused {
+    function authorizePurchase(Order calldata order) external override nonReentrant whenNotPaused {
         require(currentStage == SaleStage.PublicSale, "Public sale not active");
         require(order.nonce == nonces[order.buyer], "Invalid nonce");
         require(block.timestamp <= order.expiry, "Signature expired");
 
-        // Verify original user signature
-        require(
-            _verifyUserSignature(
+        // Compute user order hash
+        bytes32 userOrderHash = keccak256(
+            abi.encode(
+                USER_ORDER_TYPEHASH,
                 order.roundId,
                 order.buyer,
                 order.gptAmount,
                 order.nonce,
                 order.expiry,
                 order.paymentToken,
-                order.userSignature
-            ),
+                chainId
+            )
+        );
+
+        // Verify user signature using SalesLib
+        require(
+            SalesLib.verifyUserSignature(DOMAIN_SEPARATOR, userOrderHash, order.buyer, order.userSignature),
             "Invalid user signature"
         );
 
-        // Verify relayer signature
-        require(
-            _verifyRelayerSignature(
+        // Compute relayer order hash
+        bytes32 relayerOrderHash = keccak256(
+            abi.encode(
+                RELAYER_ORDER_TYPEHASH,
                 order.roundId,
                 order.buyer,
                 order.gptAmount,
@@ -268,76 +312,44 @@ contract SalesContract is
                 order.expiry,
                 order.paymentToken,
                 order.userSignature,
-                order.relayerSignature
-            ),
+                chainId
+            )
+        );
+
+        // Verify relayer signature using SalesLib
+        require(
+            SalesLib.verifyRelayerSignature(DOMAIN_SEPARATOR, relayerOrderHash, trustedSigner, order.relayerSignature),
             "Invalid relayer signature"
         );
 
-        // Process the purchase
-        _processPurchase(order.roundId, order.gptAmount, order.paymentToken, order.buyer, false);
+        // Fetch the current round
+        ISalesContract.Round storage currentRound = rounds[order.roundId];
+        require(currentRound.isActive, "Round is not active");
+        TokenConfig storage tokenConfig = acceptedTokens[order.paymentToken];
+
+        // Process the purchase using SalesLib
+        SalesLib.processPurchase(
+            goldPriceFeed,
+            tokenConfig,
+            tradingVault,
+            gptToken,
+            currentRound,
+            order.gptAmount,
+            order.paymentToken,
+            order.buyer,
+            TOKENS_PER_TROY_OUNCE
+        );
 
         nonces[order.buyer]++;
     }
 
-    // === Signature Verification ===
-    function _verifyUserSignature(
-        uint256 roundId,
-        address buyer,
-        uint256 amount,
-        uint256 nonce,
-        uint256 expiry,
-        address paymentToken,
-        bytes memory signature
-    ) internal view returns (bool) {
-        bytes32 structHash =
-            keccak256(abi.encode(USER_ORDER_TYPEHASH, roundId, buyer, amount, nonce, expiry, paymentToken, chainId));
-
-        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR, structHash));
-
-        return SignatureChecker.isValidSignatureNow(buyer, digest, signature);
-    }
-
-    function _verifyRelayerSignature(
-        uint256 roundId,
-        address buyer,
-        uint256 amount,
-        uint256 nonce,
-        uint256 expiry,
-        address paymentToken,
-        bytes memory userSignature,
-        bytes memory relayerSignature
-    ) internal view returns (bool) {
-        bytes32 structHash = keccak256(
-            abi.encode(
-                RELAYER_ORDER_TYPEHASH, roundId, buyer, amount, nonce, expiry, paymentToken, userSignature, chainId
-            )
-        );
-
-        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR, structHash));
-
-        require(relayerSignature.length == 65, "Invalid signature length");
-        return SignatureChecker.isValidSignatureNow(trustedSigner, digest, relayerSignature);
-    }
-
-    // === Price Calculation ===
-    function calculatePrice(address paymentToken, uint256 gptAmount) public view returns (uint256 tokenAmount) {
-        TokenConfig memory config = acceptedTokens[paymentToken];
-        require(config.isAccepted, "Token not accepted");
-
-        (int256 goldPrice, int256 tokenPrice) = PriceCalculator.getLatestPrices(goldPriceFeed, config.priceFeed);
-
-        tokenAmount = PriceCalculator.calculatePaymentTokenAmount(
-            goldPrice, tokenPrice, gptAmount, config.decimals, TOKENS_PER_TROY_OUNCE
-        );
-    }
-
     // === Emergency Functions ===
-    function pause() public onlyRole(DEFAULT_ADMIN_ROLE) {
+    function pause() public override onlyRole(DEFAULT_ADMIN_ROLE) {
         _pause();
         emit Paused(msg.sender, block.timestamp);
     }
 
-    function unpause() public onlyRole(DEFAULT_ADMIN_ROLE) {
+    function unpause() public override onlyRole(DEFAULT_ADMIN_ROLE) {
         _unpause();
         emit Unpaused(msg.sender, block.timestamp);
     }
@@ -352,7 +364,7 @@ contract SalesContract is
      * - Cannot recover GPT token
      * - Amount must be <= balance
      */
-    function recoverERC20(address token, uint256 amount) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function recoverERC20(address token, uint256 amount) external override onlyRole(DEFAULT_ADMIN_ROLE) {
         require(token != address(gptToken), "Cannot recover GPT token");
         require(amount > 0, "Amount must be greater than 0");
         require(ERC20Upgradeable(token).balanceOf(address(this)) >= amount, "Insufficient balance");
@@ -372,7 +384,7 @@ contract SalesContract is
      * Requirements:
      * - Only admin can call
      */
-    function addToWhitelist(address addr) external onlyRole(SALES_MANAGER_ROLE) {
+    function addToWhitelist(address addr) external override onlyRole(SALES_MANAGER_ROLE) {
         require(addr != address(0), "Invalid address");
 
         whitelistedAddresses[addr] = true;
@@ -390,7 +402,7 @@ contract SalesContract is
      * - Only admin can call
      * Emits a {WhitelistRemoved} event.
      */
-    function removeFromWhitelist(address addr) external onlyRole(SALES_MANAGER_ROLE) {
+    function removeFromWhitelist(address addr) external override onlyRole(SALES_MANAGER_ROLE) {
         require(addr != address(0), "Invalid address");
         require(whitelistedAddresses[addr], "Address not whitelisted");
 
@@ -398,55 +410,6 @@ contract SalesContract is
         delete whitelistedAddresses[addr];
 
         emit AddressRemoved(addr);
-    }
-
-    // === Internal Functions ===
-
-    /**
-     * @dev Processes the purchase of tokens during a sale round.
-     * @param amount The amount of tokens to be purchased.
-     * @param paymentToken The address of the token used for payment.
-     * @param buyer The address of the buyer.
-     *
-     * Requirements:
-     * - The current round must be active.
-     * - The current time must be before the round's end time.
-     * - The total tokens sold in the round plus the amount being purchased must not exceed the round's maximum token limit.
-     * - The buyer must have a sufficient balance of the payment token.
-     *
-     * Emits a {TokensPurchased} event.
-     */
-    function _processPurchase(uint256 roundId, uint256 amount, address paymentToken, address buyer, bool isPresale)
-        internal
-    {
-        // check if the contract is paused
-        require(!paused(), "Contract is paused");
-
-        // check if the round is active
-        Round storage round = rounds[roundId];
-        require(round.isActive, "No active round");
-        require(block.timestamp <= round.endTime, "Round ended");
-        require(round.tokensSold + amount <= round.maxTokens, "Exceeds round limit");
-
-        uint256 tokenAmount = calculatePrice(paymentToken, amount);
-
-        // console.log("token amount: %s", tokenAmount);
-
-        // Check if the buyer has enough balance
-        uint256 userBalance = ERC20Upgradeable(paymentToken).balanceOf(buyer);
-        require(userBalance >= tokenAmount, "Insufficient balance");
-
-        // Ensure the contract has the required allowance
-        uint256 allowance = ERC20Upgradeable(paymentToken).allowance(buyer, address(this));
-        require(allowance >= tokenAmount, "Token allowance too low");
-
-        // Transfer tokens to the contract
-        ERC20Upgradeable(paymentToken).safeTransferFrom(buyer, address(tradingVault), tokenAmount);
-
-        round.tokensSold += amount;
-        gptToken.mint(buyer, amount);
-
-        emit TokensPurchased(buyer, amount, tokenAmount, paymentToken, isPresale);
     }
 
     // === UUPS Upgrade ===
