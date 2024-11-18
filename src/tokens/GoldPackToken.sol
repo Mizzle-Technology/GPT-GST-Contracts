@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.28;
+pragma solidity 0.8.28;
 
 // Core functionality
 import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
@@ -76,7 +76,10 @@ contract GoldPackToken is
      * @dev Initializes the contract, setting the deployer as the initial owner and admin.
      * @param burnVaultAddress The address of the burn vault contract that will handle token burning.
      */
-    function initialize(address burnVaultAddress) public initializer {
+    function initialize(address _super, address _admin, address _sales_manager, address burnVaultAddress)
+        public
+        initializer
+    {
         require(burnVaultAddress != address(0), "Invalid burn vault address");
 
         __ERC20_init("Gold Pack Token", "GPT");
@@ -87,9 +90,10 @@ contract GoldPackToken is
 
         burnVault = BurnVault(burnVaultAddress);
 
-        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
-        _grantRole(ADMIN_ROLE, msg.sender);
-        _grantRole(SALES_ROLE, msg.sender);
+        _grantRole(DEFAULT_ADMIN_ROLE, _super);
+        _grantRole(ADMIN_ROLE, _admin);
+        _grantRole(SALES_ROLE, _sales_manager);
+        _setRoleAdmin(SALES_ROLE, DEFAULT_ADMIN_ROLE);
     }
 
     function decimals() public pure override returns (uint8) {
@@ -142,7 +146,7 @@ contract GoldPackToken is
      * - Caller must have SALES_ROLE
      * - Account must have tokens in vault
      */
-    function burnFromVault(address account) public override nonReentrant onlyRole(SALES_ROLE) {
+    function burnFromVault(address account) public override nonReentrant whenNotPaused onlyRole(SALES_ROLE) {
         uint256 balance = burnVault.getBalance(account);
         require(balance > 0, "GoldPackToken: no tokens in vault");
 
@@ -172,5 +176,5 @@ contract GoldPackToken is
     }
 
     // === UUPS Upgrade ===
-    function _authorizeUpgrade(address newImplementation) internal view override onlyRole(ADMIN_ROLE) {}
+    function _authorizeUpgrade(address newImplementation) internal view override onlyRole(DEFAULT_ADMIN_ROLE) {}
 }

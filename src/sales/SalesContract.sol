@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.28;
+pragma solidity 0.8.28;
 
 // OpenZeppelin imports
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -23,7 +23,7 @@ import "./ISalesContract.sol";
  * @title SalesContract
  * @notice Manages GPT token sales with role-based access control
  * @dev ADMIN_ROLE: Withdrawals and emergency functions
- *      SALES_MANAGER_ROLE: Sales and round management
+ *      SALES_ROLE: Sales and round management
  *      Data Feeds for Testnet: https://docs.chain.link/data-feeds/price-feeds/addresses?network=ethereum&page=1
  *      Data Feeds for Mainnet: https://data.chain.link/feeds
  * Emits an {AddressWhitelisted} event.
@@ -46,7 +46,7 @@ contract SalesContract is
     uint256 public constant MAX_PRICE_AGE = 1 hours;
 
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
-    bytes32 public constant SALES_MANAGER_ROLE = keccak256("SALES_MANAGER_ROLE");
+    bytes32 public constant SALES_ROLE = keccak256("SALES_ROLE");
     bytes32 private constant DOMAIN_TYPE_HASH =
         keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
     bytes32 public constant USER_ORDER_TYPEHASH = keccak256(
@@ -84,10 +84,15 @@ contract SalesContract is
      * @param _goldPriceFeed Chainlink gold price feed address
      * @param _trustedSigner Address that signs purchase authorizations
      */
-    function initialize(address _gptToken, address _goldPriceFeed, address _trustedSigner, address _tradingVault)
-        public
-        initializer
-    {
+    function initialize(
+        address _super,
+        address _admin,
+        address _sales_manager,
+        address _gptToken,
+        address _goldPriceFeed,
+        address _trustedSigner,
+        address _tradingVault
+    ) public initializer {
         require(_gptToken != address(0), "Invalid GPT address");
         require(_goldPriceFeed != address(0), "Invalid price feed address");
         require(_trustedSigner != address(0), "Invalid signer address");
@@ -97,10 +102,11 @@ contract SalesContract is
         __Pausable_init();
         __UUPSUpgradeable_init();
 
-        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
-        _grantRole(ADMIN_ROLE, msg.sender);
-        _setRoleAdmin(SALES_MANAGER_ROLE, ADMIN_ROLE);
-        _setRoleAdmin(ADMIN_ROLE, DEFAULT_ADMIN_ROLE);
+        _grantRole(DEFAULT_ADMIN_ROLE, _super);
+        _grantRole(ADMIN_ROLE, _admin);
+        _grantRole(SALES_ROLE, _sales_manager);
+        _setRoleAdmin(SALES_ROLE, ADMIN_ROLE);
+        // _setRoleAdmin(ADMIN_ROLE, DEFAULT_ADMIN_ROLE);
 
         gptToken = GoldPackToken(_gptToken);
         tradingVault = TradingVault(_tradingVault);
@@ -153,7 +159,7 @@ contract SalesContract is
     function createRound(uint256 maxTokens, uint256 startTime, uint256 endTime)
         external
         override
-        onlyRole(SALES_MANAGER_ROLE)
+        onlyRole(SALES_ROLE)
     {
         require(startTime < endTime, "Invalid round time");
         currentRoundId = nextRoundId;
@@ -167,7 +173,7 @@ contract SalesContract is
      * @notice Activates a sale round
      * @param roundId ID of the round to activate
      */
-    function activateRound(uint256 roundId) external override onlyRole(SALES_MANAGER_ROLE) {
+    function activateRound(uint256 roundId) external override onlyRole(SALES_ROLE) {
         require(roundId < nextRoundId, "Round does not exist");
         Round storage round = rounds[roundId];
         require(!round.isActive, "Round already active");
@@ -182,7 +188,7 @@ contract SalesContract is
      * @notice Deactivates a sale round
      * @param roundId ID of the round to deactivate
      */
-    function deactivateRound(uint256 roundId) external override onlyRole(SALES_MANAGER_ROLE) {
+    function deactivateRound(uint256 roundId) external override onlyRole(SALES_ROLE) {
         require(roundId < nextRoundId, "Round does not exist");
         Round storage round = rounds[roundId];
         require(round.isActive, "Round not active");
@@ -196,7 +202,7 @@ contract SalesContract is
      * @notice Sets the current sale stage
      * @param _stage The new sale stage
      */
-    function setSaleStage(SaleStage _stage) external override onlyRole(SALES_MANAGER_ROLE) {
+    function setSaleStage(SaleStage _stage) external override onlyRole(SALES_ROLE) {
         currentStage = _stage;
     }
 
@@ -209,6 +215,9 @@ contract SalesContract is
         require(currentStage == SaleStage.PreSale, "Presale not active");
         require(whitelistedAddresses[msg.sender], "Not whitelisted");
         require(order.buyer == msg.sender, "Buyer mismatch"); // Added buyer verification
+
+        TokenConfig storage tokenConfig = acceptedTokens[order.paymentToken];
+        require(tokenConfig.isAccepted, "Token not accepted");
 
         // Compute user order hash
         bytes32 userOrderHash = keccak256(
@@ -254,7 +263,6 @@ contract SalesContract is
         // Fetch the current round
         ISalesContract.Round storage currentRound = rounds[order.roundId];
         require(currentRound.isActive, "Round is not active");
-        TokenConfig storage tokenConfig = acceptedTokens[order.paymentToken];
 
         // Process the purchase using SalesLib
         SalesLib.processPurchase(
@@ -281,6 +289,9 @@ contract SalesContract is
         require(order.nonce == nonces[order.buyer], "Invalid nonce");
         require(block.timestamp <= order.expiry, "Signature expired");
 
+        TokenConfig storage tokenConfig = acceptedTokens[order.paymentToken];
+        require(tokenConfig.isAccepted, "Token not accepted");
+
         // Compute user order hash
         bytes32 userOrderHash = keccak256(
             abi.encode(
@@ -325,7 +336,6 @@ contract SalesContract is
         // Fetch the current round
         ISalesContract.Round storage currentRound = rounds[order.roundId];
         require(currentRound.isActive, "Round is not active");
-        TokenConfig storage tokenConfig = acceptedTokens[order.paymentToken];
 
         // Process the purchase using SalesLib
         SalesLib.processPurchase(
@@ -384,7 +394,7 @@ contract SalesContract is
      * Requirements:
      * - Only admin can call
      */
-    function addToWhitelist(address addr) external override onlyRole(SALES_MANAGER_ROLE) {
+    function addToWhitelist(address addr) external override onlyRole(SALES_ROLE) {
         require(addr != address(0), "Invalid address");
 
         whitelistedAddresses[addr] = true;
@@ -402,7 +412,7 @@ contract SalesContract is
      * - Only admin can call
      * Emits a {WhitelistRemoved} event.
      */
-    function removeFromWhitelist(address addr) external override onlyRole(SALES_MANAGER_ROLE) {
+    function removeFromWhitelist(address addr) external override onlyRole(SALES_ROLE) {
         require(addr != address(0), "Invalid address");
         require(whitelistedAddresses[addr], "Address not whitelisted");
 
@@ -414,4 +424,24 @@ contract SalesContract is
 
     // === UUPS Upgrade ===
     function _authorizeUpgrade(address newImplementation) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
+
+    // === View Functions ===
+    /**
+     * @notice GTP token amount required for a given payment token amount
+     * @return gptAmount The required amount of GPT tokens
+     */
+    function queryGptAmount(uint256 paymentTokenAmount, address paymentToken) public view returns (uint256 gptAmount) {
+        require(paymentTokenAmount > 0, "Amount must be greater than 0");
+        require(paymentToken != address(0), "Invalid token address");
+        TokenConfig storage tokenConfig = acceptedTokens[paymentToken];
+        require(tokenConfig.isAccepted, "Token not accepted");
+        // check if the token config is existed
+
+        (int256 goldPrice,) = CalculationLib.getLatestPrice(goldPriceFeed);
+        (int256 tokenPrice,) = CalculationLib.getLatestPrice(tokenConfig.priceFeed);
+
+        return CalculationLib.calculateGptTokenAmount(
+            goldPrice, tokenPrice, paymentTokenAmount, tokenConfig.decimals, TOKENS_PER_TROY_OUNCE
+        );
+    }
 }

@@ -11,6 +11,7 @@ import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import "../vault/TradingVault.sol";
+import "./IRewardDistribution.sol";
 
 /**
  * @title RewardDistribution
@@ -25,7 +26,8 @@ contract RewardDistribution is
     ReentrancyGuardUpgradeable,
     OwnableUpgradeable,
     UUPSUpgradeable,
-    PausableUpgradeable
+    PausableUpgradeable,
+    IRewardDistribution
 {
     using SafeERC20 for ERC20Upgradeable;
     using EnumerableSet for EnumerableSet.AddressSet;
@@ -61,17 +63,7 @@ contract RewardDistribution is
     // Reward schedule variables
     uint256 public lastDistributionTime;
 
-    // Events
-    event SharesAllocated(address indexed account, uint256 shares);
-    event SharesAdjusted(address indexed account, uint256 oldShares, uint256 newShares);
-    event RewardToppedUp(uint256 amount);
-    event RewardsClaimed(address indexed account, uint256 amount);
-    event RewardsLocked(address indexed account);
-    event RewardsUnlocked(address indexed account);
-    event RewardsDistributed(bytes32 distributionId, uint256 amount);
-    event ShareholderRemoved(address indexed account);
-
-    function initialize(address _rewardToken) public initializer {
+    function initialize(address _rewardToken, address _admin) public initializer {
         __Ownable_init(msg.sender);
         __AccessControl_init();
         __ReentrancyGuard_init();
@@ -79,7 +71,7 @@ contract RewardDistribution is
         __UUPSUpgradeable_init();
 
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
-        _grantRole(ADMIN_ROLE, msg.sender);
+        _grantRole(ADMIN_ROLE, _admin);
 
         require(_rewardToken != address(0), "Invalid reward token address");
         rewardToken = ERC20Upgradeable(_rewardToken);
@@ -104,7 +96,7 @@ contract RewardDistribution is
      *
      * Emits a {SharesAllocated} event.
      */
-    function allocateShares(address account, uint256 shares) external onlyRole(ADMIN_ROLE) whenNotPaused {
+    function allocateShares(address account, uint256 shares) external override onlyRole(ADMIN_ROLE) whenNotPaused {
         require(account != address(0), "Invalid account address");
         require(shares > 0, "Shares must be greater than zero");
         require(totalShares + shares <= SCALE, "Total shares exceed maximum");
@@ -136,7 +128,12 @@ contract RewardDistribution is
      * - `account` cannot be the zero address.
      * - `newShares` must not cause `totalShares` to exceed `SCALE`.
      */
-    function updateShareholderShares(address account, uint256 newShares) external onlyRole(ADMIN_ROLE) whenNotPaused {
+    function updateShareholderShares(address account, uint256 newShares)
+        external
+        override
+        onlyRole(ADMIN_ROLE)
+        whenNotPaused
+    {
         // === Checks ===
         require(account != address(0), "RewardDistribution: invalid account address");
 
@@ -201,7 +198,7 @@ contract RewardDistribution is
      * - Caller must have shares allocated.
      * - There must be claimable rewards available.
      */
-    function claimRewards(bytes32 distributionId) external nonReentrant whenNotPaused {
+    function claimRewards(bytes32 distributionId) external override nonReentrant whenNotPaused {
         Distribution storage distribution = distributions[distributionId];
         require(!distribution.claimed[msg.sender], "Rewards already claimed for this distribution");
         require(!rewardsLocked[msg.sender], "Rewards are locked for this user");
@@ -221,7 +218,7 @@ contract RewardDistribution is
         emit RewardsClaimed(msg.sender, userShareAmount);
     }
 
-    function claimAllRewards() external nonReentrant whenNotPaused {
+    function claimAllRewards() external override nonReentrant whenNotPaused {
         require(!rewardsLocked[msg.sender], "Rewards are locked for this user");
 
         Shareholder storage shareholder = shareholders[msg.sender];
@@ -259,7 +256,7 @@ contract RewardDistribution is
      * - `user` cannot be the zero address.
      * - Rewards must not already be locked for the user.
      */
-    function lockRewards(address user) external onlyRole(ADMIN_ROLE) {
+    function lockRewards(address user) external override onlyRole(ADMIN_ROLE) {
         require(!rewardsLocked[user], "Rewards already locked");
         rewardsLocked[user] = true;
         emit RewardsLocked(user);
@@ -274,7 +271,7 @@ contract RewardDistribution is
      * - `user` cannot be the zero address.
      * - Rewards must already be locked for the user.
      */
-    function unlockRewards(address user) external onlyRole(ADMIN_ROLE) {
+    function unlockRewards(address user) external override onlyRole(ADMIN_ROLE) {
         require(rewardsLocked[user], "Rewards not locked");
         rewardsLocked[user] = false;
         emit RewardsUnlocked(user);
@@ -296,6 +293,7 @@ contract RewardDistribution is
      */
     function createDistribution(uint256 totalRewards, uint256 distributionTime)
         external
+        override
         onlyRole(ADMIN_ROLE)
         whenNotPaused
     {
@@ -319,7 +317,7 @@ contract RewardDistribution is
      * Requirements:
      * - Only accounts with ADMIN_ROLE can call.
      */
-    function pause() external onlyRole(ADMIN_ROLE) {
+    function pause() external override onlyRole(ADMIN_ROLE) {
         _pause();
     }
 
@@ -329,7 +327,7 @@ contract RewardDistribution is
      * Requirements:
      * - Only accounts with ADMIN_ROLE can call.
      */
-    function unpause() external onlyRole(ADMIN_ROLE) {
+    function unpause() external override onlyRole(ADMIN_ROLE) {
         _unpause();
     }
 

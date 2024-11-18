@@ -11,6 +11,8 @@ contract GoldPackTokenTest is Test {
     GoldPackToken public token;
     BurnVault public vault;
 
+    // Roles
+    address public superAdmin = address(5);
     address public admin = address(1);
     address public sales = address(2);
     address public user = address(3);
@@ -27,7 +29,7 @@ contract GoldPackTokenTest is Test {
     event Unpaused(address account, string reason, uint256 timestamp);
 
     function setUp() public {
-        vm.startPrank(admin);
+        vm.startPrank(superAdmin);
 
         // Step 1: Deploy BurnVault first
         vault = new BurnVault();
@@ -37,7 +39,7 @@ contract GoldPackTokenTest is Test {
 
         // Step 2: Deploy token with vault address
         token = new GoldPackToken();
-        token.initialize(address(vault));
+        token.initialize(superAdmin, admin, sales, address(vault));
         // console.log("Token address:", address(token));
 
         // Step 3: Set token in vault
@@ -88,7 +90,8 @@ contract GoldPackTokenTest is Test {
         assertEq(address(vault.token()), address(token));
 
         // Verify roles
-        assertTrue(token.hasRole(token.DEFAULT_ADMIN_ROLE(), admin));
+        assertTrue(token.hasRole(token.DEFAULT_ADMIN_ROLE(), superAdmin));
+        assertTrue(token.hasRole(token.ADMIN_ROLE(), admin));
         assertTrue(token.hasRole(token.SALES_ROLE(), sales));
 
         // Verify token properties
@@ -97,19 +100,19 @@ contract GoldPackTokenTest is Test {
     }
 
     function testPauseUnpause() public {
-        vm.startPrank(admin);
+        vm.startPrank(superAdmin);
 
         // Test pause
         string memory reason = "Testing pause";
         vm.expectEmit(true, true, true, true);
-        emit Paused(admin, reason, block.timestamp);
+        emit Paused(superAdmin, reason, block.timestamp);
         token.pause(reason);
         assertTrue(token.paused());
 
         // Test unpause
         reason = "Testing unpause";
         vm.expectEmit(true, true, true, true);
-        emit Unpaused(admin, reason, block.timestamp);
+        emit Unpaused(superAdmin, reason, block.timestamp);
         token.unpause(reason);
         assertFalse(token.paused());
 
@@ -146,7 +149,7 @@ contract GoldPackTokenTest is Test {
         vm.warp(block.timestamp + vault.BURN_DELAY());
 
         // Burn tokens
-        vm.prank(admin);
+        vm.prank(sales);
         token.burnFromVault(user);
         assertEq(vault.getBalance(user), 0);
     }

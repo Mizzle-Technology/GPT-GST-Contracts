@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.28;
+pragma solidity 0.8.28;
 
 import "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
@@ -7,12 +7,12 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@chainlink/shared/interfaces/AggregatorV3Interface.sol";
 import "../vault/TradingVault.sol";
 import "../tokens/GoldPackToken.sol";
-import "./PriceCalculationLib.sol";
+import "./CalculationLib.sol";
 import "../sales/ISalesContract.sol";
 
 library SalesLib {
     using SafeERC20 for ERC20Upgradeable;
-    using PriceCalculationLib for *;
+    using CalculationLib for *;
 
     // === Signature Verification ===
     function verifyUserSignature(bytes32 domainSeparator, bytes32 userOrderHash, address buyer, bytes memory signature)
@@ -52,10 +52,10 @@ library SalesLib {
         require(round.tokensSold + amount <= round.maxTokens, "Exceeds round limit");
         require(tokenConfig.isAccepted, "Token not accepted");
 
-        (int256 goldPrice,) = PriceCalculationLib.getLatestPrice(goldPriceFeed);
-        (int256 tokenPrice,) = PriceCalculationLib.getLatestPrice(tokenConfig.priceFeed);
+        (int256 goldPrice,) = CalculationLib.getLatestPrice(goldPriceFeed);
+        (int256 tokenPrice,) = CalculationLib.getLatestPrice(tokenConfig.priceFeed);
 
-        tokenAmount = PriceCalculationLib.calculatePaymentTokenAmount(
+        tokenAmount = CalculationLib.calculatePaymentTokenAmount(
             goldPrice, tokenPrice, amount, tokenConfig.decimals, tokensPerTroyOunce
         );
 

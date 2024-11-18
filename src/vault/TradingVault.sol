@@ -20,7 +20,6 @@ contract TradingVault is
     using SafeERC20 for ERC20Upgradeable;
 
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
-    bytes32 public constant WITHDRAWER_ROLE = keccak256("WITHDRAWER_ROLE");
     uint256 public constant WITHDRAWAL_DELAY = 1 days;
 
     // storage gap
@@ -41,14 +40,15 @@ contract TradingVault is
     uint256 public WITHDRAWAL_THRESHOLD; // 100k USDC
     mapping(bytes32 => WithdrawalRequest) public withdrawalRequests;
 
-    function initialize(address _safeWallet) public initializer {
+    function initialize(address _safeWallet, address _admin, address _super) public initializer {
         __AccessControl_init();
         __ReentrancyGuard_init();
         __Pausable_init();
         __UUPSUpgradeable_init();
 
-        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
-        _grantRole(ADMIN_ROLE, msg.sender);
+        _grantRole(DEFAULT_ADMIN_ROLE, _super);
+        _grantRole(ADMIN_ROLE, _admin);
+        _setRoleAdmin(ADMIN_ROLE, DEFAULT_ADMIN_ROLE);
 
         require(_safeWallet != address(0), "Invalid wallet address");
         safeWallet = _safeWallet;

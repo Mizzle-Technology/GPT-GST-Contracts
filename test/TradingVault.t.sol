@@ -23,8 +23,10 @@ contract TradingVaultTest is Test {
     bytes32 private constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
 
     // Addresses
+    address private superAdmin = address(5);
     address private admin = address(1);
-    address private nonAdmin = address(2);
+    address private nonAdmin = address(6);
+    address private sales = address(2);
     address private safeWallet = address(3);
     address private newSafeWallet = address(4); // For testing wallet updates
 
@@ -50,26 +52,17 @@ contract TradingVaultTest is Test {
         usdcPriceFeed.setPrice(1 * 10 ** 8); // $1/USDC with 8 decimals
 
         // Deploy BurnVault
+        vm.startPrank(superAdmin);
         burnVault = new BurnVault();
-        vm.startPrank(admin);
         burnVault.initialize();
-        vm.stopPrank();
 
         // Deploy GoldPackToken
         gptToken = new GoldPackToken();
-        vm.startPrank(admin);
-        gptToken.initialize(address(burnVault));
-        vm.stopPrank();
+        gptToken.initialize(superAdmin, admin, sales, address(burnVault));
 
         // Deploy TradingVault
         tradingVault = new TradingVault();
-        vm.startPrank(admin);
-        tradingVault.initialize(safeWallet);
-        vm.stopPrank();
-
-        // Assign ADMIN_ROLE to admin
-        vm.startPrank(admin);
-        tradingVault.grantRole(ADMIN_ROLE, admin);
+        tradingVault.initialize(safeWallet, admin, superAdmin);
         vm.stopPrank();
     }
 
@@ -81,7 +74,7 @@ contract TradingVaultTest is Test {
         emit WithdrawalWalletUpdated(newSafeWallet);
 
         // Perform the action
-        vm.prank(admin);
+        vm.prank(superAdmin);
         bool success = tradingVault.setWithdrawalWallet(newSafeWallet);
         assertTrue(success);
 
@@ -101,14 +94,14 @@ contract TradingVaultTest is Test {
     function testSetWithdrawalWalletToZeroAddress() public {
         // Attempt to set withdrawal wallet to zero address and expect revert
         vm.expectRevert(bytes("Invalid wallet address"));
-        vm.prank(admin);
+        vm.prank(superAdmin);
         tradingVault.setWithdrawalWallet(address(0));
     }
 
     function testSetWithdrawalWalletSameAddress() public {
         // Attempt to set withdrawal wallet to the current address and expect revert
         vm.expectRevert(bytes("Same wallet address"));
-        vm.prank(admin);
+        vm.prank(superAdmin);
         tradingVault.setWithdrawalWallet(safeWallet);
     }
 
@@ -118,7 +111,7 @@ contract TradingVaultTest is Test {
         uint256 newThreshold = 500000 * 10 ** 6; // Example: 500,000 USDC
 
         // Perform the action
-        vm.prank(admin);
+        vm.prank(superAdmin);
         bool success = tradingVault.setWithdrawalThreshold(newThreshold);
         assertTrue(success);
 
@@ -138,7 +131,7 @@ contract TradingVaultTest is Test {
     function testSetWithdrawalThresholdToZero() public {
         // Attempt to set withdrawal threshold to zero and expect revert
         vm.expectRevert(bytes("Threshold must be greater than 0"));
-        vm.prank(admin);
+        vm.prank(superAdmin);
         tradingVault.setWithdrawalThreshold(0);
     }
 
@@ -147,7 +140,7 @@ contract TradingVaultTest is Test {
 
         // Attempt to set the same threshold and expect revert
         vm.expectRevert(bytes("Same threshold"));
-        vm.prank(admin);
+        vm.prank(superAdmin);
         tradingVault.setWithdrawalThreshold(currentThreshold);
     }
 
@@ -205,11 +198,12 @@ contract TradingVaultTest is Test {
 
     function testUpgradeToV2() public {
         // Start pranking as admin before deploying the proxy
-        vm.startPrank(admin);
+        vm.startPrank(superAdmin);
 
         // Deploy Proxy with initialize called by admin
-        address proxy =
-            Upgrades.deployUUPSProxy("TradingVault.sol", abi.encodeCall(TradingVault.initialize, (safeWallet)));
+        address proxy = Upgrades.deployUUPSProxy(
+            "TradingVault.sol", abi.encodeCall(TradingVault.initialize, (safeWallet, admin, superAdmin))
+        );
 
         TradingVault proxyContract = TradingVault(proxy);
 
@@ -223,7 +217,7 @@ contract TradingVaultTest is Test {
         bytes memory emptyData = "";
 
         // Start pranking as admin to perform the upgrade
-        vm.startPrank(admin);
+        vm.startPrank(superAdmin);
 
         // Perform upgrade with initialization
         proxyContract.upgradeToAndCall(address(v2_impl), emptyData);

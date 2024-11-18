@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.28;
+pragma solidity 0.8.28;
 
 import "@chainlink/shared/interfaces/AggregatorV3Interface.sol";
 
-library PriceCalculationLib {
+library CalculationLib {
     uint256 public constant MAX_PRICE_AGE = 1 hours;
 
     /**

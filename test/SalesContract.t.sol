@@ -11,6 +11,7 @@ import "../src/sales/ISalesContract.sol";
 import "../src/vault/BurnVault.sol";
 import "../src/vault/TradingVault.sol";
 import "./Mocks.sol";
+import "forge-std/console.sol";
 
 contract SalesContractTest is Test {
     // Define constants at the contract level
@@ -20,71 +21,96 @@ contract SalesContractTest is Test {
     GoldPackToken private gptToken;
     SalesContract private salesContract;
     TradingVault private tradingVault;
+    BurnVault private burnVault;
     MockERC20 private usdc;
     MockAggregator private goldPriceFeed;
     MockAggregator private usdcPriceFeed;
 
     address private user;
     address private relayer;
-    address private admin = address(1);
-    address private sales = address(2);
-    address private safewWallet = address(3);
+    address private superAdmin = address(0x1);
+    address private admin = address(0x2);
+    address private sales = address(0x3);
+    address private safeWallet = address(0x4);
     uint256 private userPrivateKey;
     uint256 private relayerPrivateKey;
 
+    event Debug(string message);
+
     function setUp() public {
         // Deploy mock tokens and price feeds
-        usdc = new MockERC20();
-        usdc.initialize("USDC", "USDC", 6);
-        goldPriceFeed = new MockAggregator();
-        usdcPriceFeed = new MockAggregator();
-
-        // Set realistic prices with 8 decimals
-        goldPriceFeed.setPrice(2000 * 10 ** 8); // $2000/oz with 8 decimals
-        usdcPriceFeed.setPrice(1 * 10 ** 8); // $1/USDC with 8 decimals
-
-        // Generate private keys
         userPrivateKey = uint256(keccak256("user private key"));
         relayerPrivateKey = uint256(keccak256("relayer private key"));
+
+        usdc = new MockERC20();
+        usdc.initialize("USDC", "USDC", 6);
+
+        // Set initial prices
+        goldPriceFeed = new MockAggregator();
+        goldPriceFeed.setPrice(2000 * 10 ** 8); // $2000/oz with 8 decimals
+        usdcPriceFeed = new MockAggregator();
+        usdcPriceFeed.setPrice(1 * 10 ** 8); // $1/USDC with 8 decimals
 
         // Derive the associated addresses
         user = vm.addr(userPrivateKey);
         relayer = vm.addr(relayerPrivateKey);
 
+        // Deploy GoldPackToken and SalesContract
+        vm.startPrank(superAdmin);
+
         // Deploy BurnVault
-        BurnVault burnVault = new BurnVault();
+        //console.log("Deploying BurnVault");
+        burnVault = new BurnVault();
         burnVault.initialize();
+        //console.log("BurnVault deployed");
+
+        // Grant ADMIN_ROLE to superAdmin**
+        //console.log("Granting DEFAULT_ADMIN_ROLE to superAdmin in BurnVault");
+        burnVault.grantRole(burnVault.DEFAULT_ADMIN_ROLE(), superAdmin);
+        //console.log("DEFAULT_ADMIN_ROLE granted to superAdmin");
+
+        // Deploy GoldPackToken
+        //console.log("Deploying GoldPackToken");
+        gptToken = new GoldPackToken();
+        gptToken.initialize(superAdmin, admin, sales, address(burnVault));
+        //console.log("GoldPackToken deployed");
 
         // Deploy TradingVault
-        vm.startPrank(admin);
+        //console.log("Deploying TradingVault");
         tradingVault = new TradingVault();
-        tradingVault.initialize(safewWallet);
+        tradingVault.initialize(safeWallet, admin, superAdmin);
+        //console.log("TradingVault deployed");
 
-        // Deploy GoldPackToken and SalesContract
-        gptToken = new GoldPackToken();
-        gptToken.initialize(address(burnVault));
-
-        // Note: SalesContract constructor grants DEFAULT_ADMIN_ROLE to msg.sender
+        // Deploy SalesContract
+        //console.log("Deploying SalesContract");
         salesContract = new SalesContract();
-        salesContract.initialize(address(gptToken), address(goldPriceFeed), relayer, address(tradingVault));
+        salesContract.initialize(
+            superAdmin, admin, sales, address(gptToken), address(goldPriceFeed), relayer, address(tradingVault)
+        );
+        salesContract.addAcceptedToken(address(usdc), address(usdcPriceFeed), 6);
+        //console.log("SalesContract deployed");
 
         // Grant SALES_ROLE to SalesContract
-
+        //console.log("Granting SALES_ROLE to SalesContract");
         gptToken.grantRole(gptToken.SALES_ROLE(), address(salesContract));
-        vm.stopPrank();
+        //console.log("SALES_ROLE granted to SalesContract");
+
+        // bool hasRole = gptToken.hasRole(gptToken.SALES_ROLE(), address(salesContract));
+        //console.log("SalesContract has SALES_ROLE: %s", hasRole);
 
         // Set up token address in BurnVault
+        //console.log("Setting token address in BurnVault");
+        vm.startPrank(superAdmin);
         burnVault.setToken(ERC20Upgradeable(address(gptToken)));
-
-        // Setup roles and configuration
-        vm.startPrank(admin);
-        salesContract.grantRole(salesContract.SALES_MANAGER_ROLE(), sales);
-        salesContract.addAcceptedToken(address(usdc), address(usdcPriceFeed), 6);
         vm.stopPrank();
+        //console.log("Token address set in BurnVault");
 
+        // Set up token address in TradingVault
+        //console.log("Setting token address in TradingVault");
         vm.startPrank(sales);
         salesContract.setSaleStage(ISalesContract.SaleStage.PublicSale);
         vm.stopPrank();
+        //console.log("Token address set in TradingVault");
     }
 
     function testAuthorizePurchase() public {
@@ -92,10 +118,12 @@ contract SalesContractTest is Test {
         usdc.mint(user, 2000 * 10 ** 6); // 2000 USDC with 6 decimals
 
         // Create and activate a sale round
+        console.log("Creating and activating a sale round");
         vm.startPrank(sales);
         salesContract.createRound(100_000_000000, block.timestamp, block.timestamp + 1 days); // Create a round with 100,000 GPT tokens
         salesContract.activateRound(salesContract.currentRoundId()); // Activate the first round
         vm.stopPrank();
+        console.log("Round activated");
 
         // Create order
         SalesContract.Order memory order = ISalesContract.Order({
@@ -399,7 +427,7 @@ contract SalesContractTest is Test {
         salesContract.activateRound(salesContract.currentRoundId());
         vm.stopPrank();
 
-        vm.startPrank(admin);
+        vm.startPrank(superAdmin);
         // Pause the contract
         salesContract.pause();
 

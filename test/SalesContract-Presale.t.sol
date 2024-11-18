@@ -28,6 +28,7 @@ contract SalesContractPresaleTest is Test {
 
     address private user;
     address private relayer;
+    address private superAdmin = address(5);
     address private admin = address(1);
     address private sales = address(2);
     address private user2 = address(3);
@@ -62,17 +63,21 @@ contract SalesContractPresaleTest is Test {
         burnVault.initialize();
 
         // Deploy GoldPackToken and SalesContract
-        vm.startPrank(admin);
+        vm.startPrank(superAdmin);
         gptToken = new GoldPackToken();
-        gptToken.initialize(address(burnVault));
+        gptToken.initialize(superAdmin, admin, sales, address(burnVault));
 
         // Deploy TradingVault
         tradingVault = new TradingVault();
-        tradingVault.initialize(safeWallet);
+        tradingVault.initialize(safeWallet, admin, superAdmin);
 
         // Note: SalesContract constructor grants DEFAULT_ADMIN_ROLE to msg.sender
         salesContract = new SalesContract();
-        salesContract.initialize(address(gptToken), address(goldPriceFeed), relayer, address(tradingVault));
+        salesContract.initialize(
+            superAdmin, admin, sales, address(gptToken), address(goldPriceFeed), relayer, address(tradingVault)
+        );
+
+        salesContract.addAcceptedToken(address(usdc), address(usdcPriceFeed), 6);
 
         // Grant SALES_ROLE to SalesContract
         gptToken.grantRole(gptToken.SALES_ROLE(), address(salesContract));
@@ -80,12 +85,6 @@ contract SalesContractPresaleTest is Test {
 
         // Set up token address in BurnVault
         burnVault.setToken(ERC20Upgradeable(address(gptToken)));
-
-        // Setup roles and configuration
-        vm.startPrank(admin);
-        salesContract.grantRole(salesContract.SALES_MANAGER_ROLE(), sales);
-        salesContract.addAcceptedToken(address(usdc), address(usdcPriceFeed), 6);
-        vm.stopPrank();
 
         vm.startPrank(sales);
         salesContract.addToWhitelist(user);
