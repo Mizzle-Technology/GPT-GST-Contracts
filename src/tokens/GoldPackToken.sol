@@ -134,7 +134,6 @@ contract GoldPackToken is
         require(amount % TOKENS_PER_TROY_OUNCE == 0, "GoldPackToken: amount must be a whole number of Troy ounces");
 
         // Transfer tokens to burn vault
-        _transfer(msg.sender, address(burnVault), amount);
         burnVault.depositTokens(msg.sender, amount);
         emit VaultDeposit(msg.sender, amount);
     }

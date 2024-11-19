@@ -138,7 +138,8 @@ contract GoldPackTokenTest is Test {
 
         // Deposit to vault
         vm.startPrank(user);
-
+        address burnVaultAddress = token.getBurnVaultAddress();
+        token.approve(burnVaultAddress, amount);
         // Approve vault to spend tokens
         token.depositToBurnVault(amount);
         assertEq(vault.getBalance(user), amount);
@@ -190,11 +191,15 @@ contract GoldPackTokenTest is Test {
         vm.warp(1);
 
         // Retrieve the BurnVault address
-        address burnVaultAddress = address(token.burnVault());
+        address burnVaultAddress = token.getBurnVaultAddress();
 
         vm.startPrank(user);
         // Approve the BurnVault to spend tokens on behalf of the user
         token.approve(burnVaultAddress, amount);
+
+        uint256 allowance = token.allowance(user, burnVaultAddress);
+        assertEq(allowance, amount, "BurnVault does not have the correct allowance");
+
         // Deposit tokens to the BurnVault
         token.depositToBurnVault(amount);
         vm.stopPrank();

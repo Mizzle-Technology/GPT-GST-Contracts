@@ -62,6 +62,7 @@ library SalesLib {
         uint256 userBalance = ERC20Upgradeable(paymentToken).balanceOf(buyer);
         require(userBalance >= tokenAmount, "Insufficient balance");
 
+        // Transfer tokens to the vault
         uint256 allowance = ERC20Upgradeable(paymentToken).allowance(buyer, address(this));
         require(allowance >= tokenAmount, "Token allowance too low");
 

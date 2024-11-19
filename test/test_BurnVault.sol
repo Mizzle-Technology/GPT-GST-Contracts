@@ -3,126 +3,12 @@ pragma solidity 0.8.28;
 
 import "forge-std/Test.sol";
 import "../src/vault/BurnVault.sol";
+import {MockERC20, MaliciousContract, ReentrantERC20} from "./Mocks.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20BurnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
-
-// Interface for the callback
-interface IReentrancyAttack {
-    function reenter() external;
-}
-
-// Reentrant ERC20 Token for testing
-contract ReentrantERC20 is ERC20Upgradeable, ERC20BurnableUpgradeable {
-    uint8 private _customDecimals;
-
-    function initialize(string memory name, string memory symbol, uint8 decimals_) public initializer {
-        __ERC20_init(name, symbol);
-        __ERC20Burnable_init();
-        _customDecimals = decimals_;
-    }
-
-    function decimals() public view override returns (uint8) {
-        return _customDecimals;
-    }
-
-    function mint(address to, uint256 amount) public {
-        _mint(to, amount);
-    }
-
-    function burn(uint256 amount) public override {
-        super.burn(amount);
-        // If the caller is a contract, invoke reenter
-        if (isContract(msg.sender)) {
-            IReentrancyAttack(msg.sender).reenter();
-        }
-    }
-
-    // Override transferFrom to include a callback for reentrancy
-    function transferFrom(address from, address to, uint256 amount) public override returns (bool) {
-        // Normal transferFrom logic
-        _spendAllowance(from, _msgSender(), amount);
-        _transfer(from, to, amount);
-
-        // If the sender is a contract, invoke the reenter function
-        if (isContract(from)) {
-            IReentrancyAttack(from).reenter();
-        }
-
-        return true;
-    }
-
-    // Helper function to check if an address is a contract
-    function isContract(address account) internal view returns (bool) {
-        uint256 size;
-        assembly {
-            size := extcodesize(account)
-        }
-        return size > 0;
-    }
-}
-
-// Mock ERC20 Token for testing
-contract MockERC20 is ERC20Upgradeable, ERC20BurnableUpgradeable {
-    uint8 private _customDecimals;
-
-    function initialize(string memory name, string memory symbol, uint8 decimals_) public initializer {
-        __ERC20_init(name, symbol);
-        __ERC20Burnable_init();
-
-        _customDecimals = decimals_;
-    }
-
-    function decimals() public view override returns (uint8) {
-        return _customDecimals;
-    }
-
-    function mint(address to, uint256 amount) public {
-        _mint(to, amount);
-    }
-
-    function burn(address from, uint256 amount) public {
-        _burn(from, amount);
-    }
-}
-
-// Malicious contract for reentrancy tests
-contract MaliciousContract is IReentrancyAttack {
-    BurnVault public vault;
-    ReentrantERC20 public token;
-    bool public reentered;
-    address public targetAccount;
-
-    constructor(BurnVault _vault, ReentrantERC20 _token) {
-        vault = _vault;
-        token = _token;
-        reentered = false;
-    }
-
-    function attackDeposit(uint256 amount) public {
-        token.approve(address(vault), amount);
-        vault.depositTokens(address(this), amount);
-    }
-
-    // This function will be called during transferFrom in ReentrantERC20
-    function reenter() external override {
-        if (!reentered) {
-            reentered = true;
-            // Attempt to reenter depositTokens
-            vault.depositTokens(address(this), 1);
-
-            // Attempt to reenter burnTokens
-            vault.burnTokens(targetAccount);
-        }
-    }
-
-    function attackBurn(address account) public {
-        targetAccount = account;
-        vault.burnTokens(account);
-    }
-}
 
 contract TestBurnVault is Test {
     event TokensDeposited(address indexed from, uint256 amount, uint256 timestamp);

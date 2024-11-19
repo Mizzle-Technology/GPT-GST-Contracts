@@ -73,8 +73,11 @@ contract BurnVault is Initializable, AccessControlUpgradeable, ReentrancyGuardUp
     function depositTokens(address user_account, uint256 amount) public nonReentrant whenNotPaused {
         require(amount > 0, "BurnVault: amount must be greater than zero");
 
+        // check the allowance of the token
+        require(token.allowance(user_account, address(this)) >= amount, "BurnVault: token allowance not enough");
+
         // Transfer tokens to vault
-        token.safeTransferFrom(msg.sender, address(this), amount);
+        token.safeTransferFrom(user_account, address(this), amount);
 
         // Update the deposit record
         deposits[user_account] = Deposit({

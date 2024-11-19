@@ -79,12 +79,13 @@ contract SalesContractPresaleTest is Test {
 
         salesContract.addAcceptedToken(address(usdc), address(usdcPriceFeed), 6);
 
-        // Grant SALES_ROLE to SalesContract
+        // **assign the sales role to the sales contract**
         gptToken.grantRole(gptToken.SALES_ROLE(), address(salesContract));
-        vm.stopPrank();
 
         // Set up token address in BurnVault
         burnVault.setToken(ERC20Upgradeable(address(gptToken)));
+
+        vm.stopPrank();
 
         vm.startPrank(sales);
         salesContract.addToWhitelist(user);
@@ -195,6 +196,9 @@ contract SalesContractPresaleTest is Test {
         vm.startPrank(user);
         usdc.approve(address(salesContract), 2000 * 10 ** 6); // Approve 2000 USDC (with 6 decimals)
         vm.stopPrank();
+
+        // Check the Sales Role is assigned to the Sales Contract
+        assertTrue(gptToken.isSales(address(salesContract)), "Sales role not assigned to Sales Contract");
 
         vm.prank(user);
         salesContract.preSalePurchase(order);
