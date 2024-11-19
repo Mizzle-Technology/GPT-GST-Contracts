@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.28;
+pragma solidity 0.8.28;
 
 import "forge-std/Test.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
@@ -60,7 +60,7 @@ contract SalesContractPresaleTest is Test {
 
         // Deploy BurnVault
         BurnVault burnVault = new BurnVault();
-        burnVault.initialize();
+        burnVault.initialize(superAdmin, admin);
 
         // Deploy GoldPackToken and SalesContract
         vm.startPrank(superAdmin);

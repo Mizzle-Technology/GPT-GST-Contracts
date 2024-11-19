@@ -37,9 +37,16 @@ contract BurnVault is Initializable, AccessControlUpgradeable, ReentrancyGuardUp
     /**
      * @dev First initialization step - sets up roles
      */
-    function initialize() public initializer {
-        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
-        _grantRole(ADMIN_ROLE, msg.sender);
+    function initialize(address _super, address _admin) public initializer {
+        require(_super != address(0), "BurnVault: the default admin cannot be the zero address");
+        require(_admin != address(0), "BurnVault: the admin cannot be the zero address");
+
+        __AccessControl_init();
+        __ReentrancyGuard_init();
+        __Pausable_init();
+
+        _grantRole(DEFAULT_ADMIN_ROLE, _super);
+        _grantRole(ADMIN_ROLE, _admin);
         _initialized = false;
     }
 
@@ -49,7 +56,7 @@ contract BurnVault is Initializable, AccessControlUpgradeable, ReentrancyGuardUp
      */
     function setToken(ERC20Upgradeable _token) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(!_initialized, "BurnVault: already initialized");
-        require(address(_token) != address(0), "BurnVault: zero address");
+        require(address(_token) != address(0), "BurnVault: token cannot be the zero address");
         token = _token;
         _initialized = true;
     }
@@ -65,6 +72,9 @@ contract BurnVault is Initializable, AccessControlUpgradeable, ReentrancyGuardUp
      */
     function depositTokens(address user_account, uint256 amount) public nonReentrant whenNotPaused {
         require(amount > 0, "BurnVault: amount must be greater than zero");
+
+        // Transfer tokens to vault
+        token.safeTransferFrom(msg.sender, address(this), amount);
 
         // Update the deposit record
         deposits[user_account] = Deposit({
@@ -97,6 +107,8 @@ contract BurnVault is Initializable, AccessControlUpgradeable, ReentrancyGuardUp
 
         // Burn tokens held by vault
         ERC20BurnableUpgradeable(address(token)).burn(amountToBurn);
+
+        // update the deposit record
 
         delete deposits[account];
         emit TokensBurned(msg.sender, account, amountToBurn);

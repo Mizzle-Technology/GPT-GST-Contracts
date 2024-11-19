@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.28;
+pragma solidity 0.8.28;
 
 import "forge-std/Test.sol";
 import "../src/tokens/GoldPackToken.sol";
@@ -33,7 +33,7 @@ contract GoldPackTokenTest is Test {
 
         // Step 1: Deploy BurnVault first
         vault = new BurnVault();
-        vault.initialize();
+        vault.initialize(superAdmin, admin);
 
         // console.log("Vault address:", address(vault));
 
@@ -182,19 +182,24 @@ contract GoldPackTokenTest is Test {
     function testBurnBeforeDelay() public {
         uint256 amount = token.TOKENS_PER_TROY_OUNCE();
 
-        // Setup
+        // Setup: Mint tokens to the user
         vm.prank(sales);
         token.mint(user, amount);
 
-        // Start at block.timestamp = 1
+        // Set the block timestamp to 1
         vm.warp(1);
 
+        // Retrieve the BurnVault address
+        address burnVaultAddress = address(token.burnVault());
+
         vm.startPrank(user);
-        token.approve(address(token), amount);
+        // Approve the BurnVault to spend tokens on behalf of the user
+        token.approve(burnVaultAddress, amount);
+        // Deposit tokens to the BurnVault
         token.depositToBurnVault(amount);
         vm.stopPrank();
 
-        // Try to burn immediately at same timestamp
+        // Attempt to burn tokens before the delay period has passed
         vm.expectRevert("BurnVault: burn delay not reached");
         vm.prank(sales);
         token.burnFromVault(user);
