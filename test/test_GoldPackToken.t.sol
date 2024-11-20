@@ -6,6 +6,8 @@ import "../src/tokens/GoldPackToken.sol";
 import "../src/vault/BurnVault.sol";
 import "@openzeppelin/contracts/access/IAccessControl.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20BurnableUpgradeable.sol";
+import {Upgrades} from "openzeppelin-foundry-upgrades/Upgrades.sol";
 
 contract GoldPackTokenTest is Test {
     GoldPackToken public token;
@@ -16,6 +18,8 @@ contract GoldPackTokenTest is Test {
     address public admin = address(1);
     address public sales = address(2);
     address public user = address(3);
+    address public burnVaultProxy;
+    address public gptproxy;
 
     // Events
     event Mint(address indexed to, uint256 amount);
@@ -33,23 +37,36 @@ contract GoldPackTokenTest is Test {
 
         // Step 1: Deploy BurnVault first
         vault = new BurnVault();
-        vault.initialize(superAdmin, admin);
-
-        // console.log("Vault address:", address(vault));
+        burnVaultProxy =
+            Upgrades.deployUUPSProxy("BurnVault.sol", abi.encodeCall(BurnVault.initialize, (superAdmin, admin)));
+        vault = BurnVault(burnVaultProxy);
+        //console.log("Vault address:", address(vault));
 
         // Step 2: Deploy token with vault address
+        /**
+         * you need to specify the full contract identifier, which typically includes
+         * both the file path and the contract name. This ensures that Upgrades.deployUUPSProxy can
+         * uniquely locate the correct contract artifact.
+         *      "src/tokens/GoldPackToken.sol:GoldPackToken",
+         */
         token = new GoldPackToken();
-        token.initialize(superAdmin, admin, sales, address(vault));
-        // console.log("Token address:", address(token));
+        gptproxy = Upgrades.deployUUPSProxy(
+            "GoldPackToken.sol:GoldPackToken", abi.encodeCall(GoldPackToken.initialize, (superAdmin, admin, sales))
+        );
+        token = GoldPackToken(gptproxy);
+        //console.log("Token address:", address(token));
 
         // Step 3: Set token in vault
-        vault.setToken(ERC20Upgradeable(address(token)));
+        BurnVault(burnVaultProxy).updateAcceptedTokens(ERC20BurnableUpgradeable(token));
+        // Set burn vault address in token
+        address burnvault = address(BurnVault(burnVaultProxy));
+        GoldPackToken(gptproxy).setBurnVault(burnvault);
 
         // Step 4: Grant roles
-        token.grantRole(token.SALES_ROLE(), sales);
+        GoldPackToken(gptproxy).grantRole(token.SALES_ROLE(), sales);
 
         // Step 5: Grant Admin role to token contract in vault
-        vault.grantRole(vault.ADMIN_ROLE(), address(token));
+        BurnVault(burnVaultProxy).grantRole(vault.ADMIN_ROLE(), address(token));
 
         vm.stopPrank();
 
@@ -87,16 +104,16 @@ contract GoldPackTokenTest is Test {
 
     function testSetup() public view {
         // Verify that the BurnVault has the correct token address
-        assertEq(address(vault.token()), address(token));
+        assertTrue(BurnVault(burnVaultProxy).isAcceptedToken(address(token)));
 
         // Verify roles
-        assertTrue(token.hasRole(token.DEFAULT_ADMIN_ROLE(), superAdmin));
-        assertTrue(token.hasRole(token.ADMIN_ROLE(), admin));
-        assertTrue(token.hasRole(token.SALES_ROLE(), sales));
+        assertTrue(GoldPackToken(gptproxy).hasRole(GoldPackToken(gptproxy).DEFAULT_ADMIN_ROLE(), superAdmin));
+        assertTrue(GoldPackToken(gptproxy).hasRole(GoldPackToken(gptproxy).ADMIN_ROLE(), admin));
+        assertTrue(GoldPackToken(gptproxy).hasRole(GoldPackToken(gptproxy).SALES_ROLE(), sales));
 
         // Verify token properties
         assertEq(token.decimals(), 6);
-        assertEq(address(token.burnVault()), address(vault));
+        assertEq(GoldPackToken(gptproxy).getBurnVaultAddress(), address(vault));
     }
 
     function testPauseUnpause() public {

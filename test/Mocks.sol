@@ -7,7 +7,7 @@ import "../src/vault/TradingVault.sol";
 import "../src/vault/BurnVault.sol";
 
 // Mock contracts
-contract MockERC20 is ERC20Upgradeable, ERC20BurnableUpgradeable {
+contract MockERC20 is ERC20BurnableUpgradeable {
     uint8 private _decimals;
 
     function initialize(string memory name, string memory symbol, uint8 decimals_) public initializer {
@@ -135,7 +135,7 @@ contract MaliciousContract is IReentrancyAttack {
 
     function attackDeposit(uint256 amount) public {
         token.approve(address(vault), amount);
-        vault.depositTokens(address(this), amount);
+        vault.depositTokens(address(this), amount, token);
     }
 
     // This function will be called during transferFrom in ReentrantERC20
@@ -143,15 +143,15 @@ contract MaliciousContract is IReentrancyAttack {
         if (!reentered) {
             reentered = true;
             // Attempt to reenter depositTokens
-            vault.depositTokens(address(this), 1);
+            vault.depositTokens(address(this), 1, token);
 
             // Attempt to reenter burnTokens
-            vault.burnTokens(targetAccount);
+            vault.burnAllTokens(targetAccount, token);
         }
     }
 
-    function attackBurn(address account) public {
+    function attackBurn(address account, uint256 amount) public {
         targetAccount = account;
-        vault.burnTokens(account);
+        vault.burnTokens(account, amount, token);
     }
 }

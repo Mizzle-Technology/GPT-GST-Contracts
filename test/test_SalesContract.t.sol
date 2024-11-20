@@ -4,7 +4,8 @@ pragma solidity 0.8.28;
 import "forge-std/Test.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
-import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20BurnableUpgradeable.sol";
+import {Upgrades} from "openzeppelin-foundry-upgrades/Upgrades.sol";
 import "../src/tokens/GoldPackToken.sol";
 import "../src/sales/SalesContract.sol";
 import "../src/sales/ISalesContract.sol";
@@ -35,6 +36,12 @@ contract SalesContractTest is Test {
     uint256 private userPrivateKey;
     uint256 private relayerPrivateKey;
 
+    // proxy
+    address private gptProxy;
+    address private salesProxy;
+    address private burnVaultProxy;
+    address private tradingVaultProxy;
+
     event Debug(string message);
 
     function setUp() public {
@@ -61,54 +68,69 @@ contract SalesContractTest is Test {
         // Deploy BurnVault
         //console.log("Deploying BurnVault");
         burnVault = new BurnVault();
-        burnVault.initialize(superAdmin, admin);
+        burnVaultProxy = Upgrades.deployUUPSProxy(
+            "BurnVault.sol:BurnVault", abi.encodeCall(burnVault.initialize, (superAdmin, admin))
+        );
+        burnVault = BurnVault(burnVaultProxy);
         //console.log("BurnVault deployed");
-
-        // Grant ADMIN_ROLE to superAdmin**
-        //console.log("Granting DEFAULT_ADMIN_ROLE to superAdmin in BurnVault");
-        burnVault.grantRole(burnVault.DEFAULT_ADMIN_ROLE(), superAdmin);
-        //console.log("DEFAULT_ADMIN_ROLE granted to superAdmin");
 
         // Deploy GoldPackToken
         //console.log("Deploying GoldPackToken");
         gptToken = new GoldPackToken();
-        gptToken.initialize(superAdmin, admin, sales, address(burnVault));
+        gptProxy = Upgrades.deployUUPSProxy(
+            "GoldPackToken.sol:GoldPackToken", abi.encodeCall(gptToken.initialize, (superAdmin, admin, sales))
+        );
+        gptToken = GoldPackToken(gptProxy);
         //console.log("GoldPackToken deployed");
+
+        // bind token with burn vault
+        BurnVault(burnVaultProxy).updateAcceptedTokens(ERC20BurnableUpgradeable(gptToken));
+        // Set burn vault address in token
+        GoldPackToken(gptProxy).setBurnVault(address(burnVault));
 
         // Deploy TradingVault
         //console.log("Deploying TradingVault");
         tradingVault = new TradingVault();
-        tradingVault.initialize(safeWallet, admin, superAdmin);
+        tradingVaultProxy = Upgrades.deployUUPSProxy(
+            "TradingVault.sol:TradingVault", abi.encodeCall(tradingVault.initialize, (safeWallet, admin, superAdmin))
+        );
+        tradingVault = TradingVault(tradingVaultProxy);
         //console.log("TradingVault deployed");
 
         // Deploy SalesContract
         //console.log("Deploying SalesContract");
         salesContract = new SalesContract();
-        salesContract.initialize(
-            superAdmin, admin, sales, address(gptToken), address(goldPriceFeed), relayer, address(tradingVault)
+        salesProxy = Upgrades.deployUUPSProxy(
+            "SalesContract.sol:SalesContract",
+            abi.encodeCall(
+                salesContract.initialize,
+                (
+                    superAdmin,
+                    admin,
+                    sales,
+                    address(GoldPackToken(gptProxy)),
+                    address(goldPriceFeed),
+                    relayer,
+                    address(TradingVault(tradingVaultProxy))
+                )
+            )
         );
-        salesContract.addAcceptedToken(address(usdc), address(usdcPriceFeed), 6);
+        salesContract = SalesContract(salesProxy);
+        SalesContract(salesProxy).addAcceptedToken(address(usdc), address(usdcPriceFeed), 6);
         //console.log("SalesContract deployed");
 
         // Grant SALES_ROLE to SalesContract
         //console.log("Granting SALES_ROLE to SalesContract");
-        gptToken.grantRole(gptToken.SALES_ROLE(), address(salesContract));
+        GoldPackToken(gptProxy).grantRole(GoldPackToken(gptProxy).SALES_ROLE(), address(salesContract));
         //console.log("SALES_ROLE granted to SalesContract");
 
         // bool hasRole = gptToken.hasRole(gptToken.SALES_ROLE(), address(salesContract));
         //console.log("SalesContract has SALES_ROLE: %s", hasRole);
 
-        // Set up token address in BurnVault
-        //console.log("Setting token address in BurnVault");
-        vm.startPrank(superAdmin);
-        burnVault.setToken(ERC20Upgradeable(address(gptToken)));
-        vm.stopPrank();
-        //console.log("Token address set in BurnVault");
-
         // Set up token address in TradingVault
         //console.log("Setting token address in TradingVault");
         vm.startPrank(sales);
-        salesContract.setSaleStage(ISalesContract.SaleStage.PublicSale);
+        SalesContract(salesProxy).setSaleStage(ISalesContract.SaleStage.PublicSale);
         vm.stopPrank();
         //console.log("Token address set in TradingVault");
     }

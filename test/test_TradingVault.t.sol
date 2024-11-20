@@ -3,6 +3,7 @@ pragma solidity 0.8.28;
 
 import "forge-std/Test.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20BurnableUpgradeable.sol";
 import {Upgrades} from "openzeppelin-foundry-upgrades/Upgrades.sol";
 import "../src/vault/TradingVault.sol"; // Adjust the import path as necessary
 import "../src/vault/BurnVault.sol"; // Ensure correct path
@@ -30,6 +31,12 @@ contract TradingVaultTest is Test {
     address private safeWallet = address(3);
     address private newSafeWallet = address(4); // For testing wallet updates
 
+    // Contract Proxy
+    address private gptProxy;
+    address private burnVaultProxy;
+    address private tradingVaultProxy;
+    address private salesProxy;
+
     // Events (Define only if you need to test event emissions)
     event WithdrawalWalletUpdated(address indexed newWallet);
     event WithdrawalThresholdUpdated(uint256 newThreshold);
@@ -51,19 +58,37 @@ contract TradingVaultTest is Test {
         goldPriceFeed.setPrice(2000 * 10 ** 8); // $2000/oz with 8 decimals
         usdcPriceFeed.setPrice(1 * 10 ** 8); // $1/USDC with 8 decimals
 
-        // Deploy BurnVault
         vm.startPrank(superAdmin);
+
+        // Deploy BurnVault
         burnVault = new BurnVault();
-        burnVault.initialize(superAdmin, admin);
+        burnVaultProxy = Upgrades.deployUUPSProxy(
+            "BurnVault.sol:BurnVault", abi.encodeCall(BurnVault.initialize, (superAdmin, admin))
+        );
+        burnVault = BurnVault(burnVaultProxy);
+        //console.log("BurnVault Address: %s", address(burnVault));
 
         // Deploy GoldPackToken
         gptToken = new GoldPackToken();
-        gptToken.initialize(superAdmin, admin, sales, address(burnVault));
+        gptProxy = Upgrades.deployUUPSProxy(
+            "GoldPackToken.sol:GoldPackToken", abi.encodeCall(GoldPackToken.initialize, (superAdmin, admin, sales))
+        );
+        gptToken = GoldPackToken(gptProxy);
+
+        // bind the Burn vault with GPT token
+        burnVault.updateAcceptedTokens(gptToken);
+        //console.log("BurnVault updated accepted tokens");
+
+        // Gpt token should have the burn vault
+        GoldPackToken(gptProxy).setBurnVault(address(BurnVault(burnVaultProxy)));
+        //console.log("GPT Token set burn vault");
 
         // Initialize TradingVault with supported tokens
         tradingVault = new TradingVault();
-        tradingVault.initialize(safeWallet, admin, superAdmin);
-
+        tradingVaultProxy = Upgrades.deployUUPSProxy(
+            "TradingVault.sol:TradingVault", abi.encodeCall(TradingVault.initialize, (safeWallet, admin, superAdmin))
+        );
+        tradingVault = TradingVault(tradingVaultProxy);
         vm.stopPrank();
     }
 
