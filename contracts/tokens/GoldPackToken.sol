@@ -12,34 +12,8 @@ import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/introspection/ERC165Upgradeable.sol";
 
 // Local imports
-import "../vault/BurnVault.sol";
-
-/**
- * @title IGoldPackToken
- * @notice Interface for GoldPackToken
- */
-interface IGoldPackToken {
-    // Events for token minting and burning
-    event Mint(address indexed to, uint256 amount);
-    event BurnVaultSet(address indexed burnVault);
-
-    // Events for role management
-    event AdminRoleGranted(address indexed account);
-    event AdminRoleRevoked(address indexed account);
-    event SalesRoleGranted(address indexed account);
-    event SalesRoleRevoked(address indexed account);
-
-    // Events for pausing and unpausing
-    event Paused(address account, string reason, uint256 timestamp);
-    event Unpaused(address account, string reason, uint256 timestamp);
-
-    // Functions declarations
-    function mint(address to, uint256 amount) external;
-    function depositToBurnVault(uint256 amount) external;
-    function burnFromVault(address account) external;
-    function burnFromVault(address _account, uint256 _amount) external;
-    function getBurnVaultAddress() external view returns (address);
-}
+import "../vaults/BurnVault.sol";
+import "./IGoldPackToken.sol";
 
 /**
  * @title GoldPackToken
@@ -103,14 +77,24 @@ contract GoldPackToken is
         return DECIMALS;
     }
 
-    function pause(string memory reason) public onlyRole(DEFAULT_ADMIN_ROLE) {
-        _pause();
-        emit Paused(msg.sender, reason, block.timestamp);
+    /**
+     * @dev Custom Modifier to check if caller has SALES_ROLE
+     */
+    modifier onlySalesRole() {
+        if (!hasRole(SALES_ROLE, msg.sender)) {
+            revert SalesRoleNotGranted(msg.sender);
+        }
+        _;
     }
 
-    function unpause(string memory reason) public onlyRole(DEFAULT_ADMIN_ROLE) {
-        _unpause();
-        emit Unpaused(msg.sender, reason, block.timestamp);
+    /**
+     * @dev Custom Modifier to check if caller has ADMIN_ROLE
+     */
+    modifier onlyAdminRole() {
+        if (!hasRole(ADMIN_ROLE, msg.sender)) {
+            revert AdminRoleNotGranted(msg.sender);
+        }
+        _;
     }
 
     /**
@@ -120,7 +104,7 @@ contract GoldPackToken is
      * Requirements:
      * - Only callable by owner
      */
-    function mint(address to, uint256 amount) external override whenNotPaused onlyRole(SALES_ROLE) {
+    function mint(address to, uint256 amount) external override whenNotPaused onlySalesRole {
         _mint(to, amount);
         emit Mint(to, amount);
     }
@@ -156,7 +140,7 @@ contract GoldPackToken is
      * - Caller must have SALES_ROLE
      * - Account must have tokens in vault
      */
-    function burnFromVault(address _account) external override nonReentrant whenNotPaused onlyRole(SALES_ROLE) {
+    function RedeemAllCoins(address _account) external override nonReentrant whenNotPaused onlySalesRole {
         require(_account != address(0), "GoldPackToken: account cannot be the zero address");
         ERC20BurnableUpgradeable token = ERC20BurnableUpgradeable(address(this));
         burnVault.burnAllTokens(_account, token);
@@ -172,12 +156,12 @@ contract GoldPackToken is
      * - Amount must be a multiple of TOKENS_PER_TROY_OUNCE (10000)
      * - Amount must be greater than 0
      */
-    function burnFromVault(address _account, uint256 _amount)
+    function RedeemCoins(address _account, uint256 _amount)
         external
         override
         nonReentrant
         whenNotPaused
-        onlyRole(SALES_ROLE)
+        onlySalesRole
     {
         require(_amount > 0, "GoldPackToken: amount must be greater than zero");
         require(_amount % TOKENS_PER_TROY_OUNCE == 0, "GoldPackToken: amount must be a whole number of Troy ounces");
@@ -221,6 +205,15 @@ contract GoldPackToken is
         returns (bool)
     {
         return interfaceId == type(ERC20BurnableUpgradeable).interfaceId || super.supportsInterface(interfaceId);
+    }
+
+    // === Pausable ===
+    function pause() external virtual whenNotPaused onlyAdminRole {
+        _pause();
+    }
+
+    function unpause() external virtual whenPaused onlyAdminRole {
+        _unpause();
     }
 
     // === UUPS Upgrade ===

@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import "../vault/TradingVault.sol";
@@ -68,15 +67,17 @@ contract RewardDistribution is
     // Reward schedule variables
     uint256 public lastDistributionTime;
 
-    function initialize(address _admin, address _super) public initializer {
+    function initialize(address _super, address _admin) public initializer {
         __Ownable_init(msg.sender);
         __AccessControl_init();
         __ReentrancyGuard_init();
         __Pausable_init();
         __UUPSUpgradeable_init();
+        __Ownable_init(_super);
 
         _grantRole(DEFAULT_ADMIN_ROLE, _super);
         _grantRole(ADMIN_ROLE, _admin);
+        _setRoleAdmin(ADMIN_ROLE, DEFAULT_ADMIN_ROLE);
 
         lastDistributionTime = block.timestamp;
 
@@ -319,6 +320,11 @@ contract RewardDistribution is
         emit RewardsUnlocked(user);
     }
 
+    function isRewardToken(address token) external view override returns (bool) {
+        require(token != address(0), "Invalid token address");
+        return supportTokens[token];
+    }
+
     // Reward Distribution Schedule
 
     /**
@@ -365,7 +371,7 @@ contract RewardDistribution is
      * Requirements:
      * - Only accounts with ADMIN_ROLE can call.
      */
-    function pause() external override onlyRole(ADMIN_ROLE) {
+    function pause() external override onlyRole(DEFAULT_ADMIN_ROLE) {
         _pause();
     }
 
@@ -375,10 +381,27 @@ contract RewardDistribution is
      * Requirements:
      * - Only accounts with ADMIN_ROLE can call.
      */
-    function unpause() external override onlyRole(ADMIN_ROLE) {
+    function unpause() external override onlyRole(DEFAULT_ADMIN_ROLE) {
         _unpause();
     }
 
     // === Upgradeability ===
-    function _authorizeUpgrade(address newImplementation) internal override onlyRole(ADMIN_ROLE) {}
+    function _authorizeUpgrade(address newImplementation) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
+
+    // === View Functions ===
+    function getShareholders(address account) external view returns (uint256 shares, bool isLocked, bool isActivated) {
+        require(account != address(0), "Invalid account address");
+        Shareholder storage shareholder = shareholders[account];
+        return (shareholder.shares, shareholder.isLocked, shareholder.isActivated);
+    }
+
+    function getDistribution(bytes32 distributionId)
+        external
+        view
+        override
+        returns (address rewardToken, uint256 totalRewards, uint256 distributionTime)
+    {
+        Distribution storage distribution = distributions[distributionId];
+        return (distribution.rewardToken, distribution.totalRewards, distribution.distributionTime);
+    }
 }

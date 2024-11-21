@@ -26,6 +26,7 @@ interface IRewardDistribution {
     function claimAllRewards() external;
     function addRewardToken(address token) external;
     function removeRewardToken(address token) external;
+    function isRewardToken(address token) external view returns (bool);
 
     // Lock/Unlock Rewards
     function lockRewards(address user) external;
@@ -33,8 +34,14 @@ interface IRewardDistribution {
 
     // Distribution Schedule
     function createDistribution(address token, uint256 totalRewards, uint256 distributionTime) external;
+    function getDistribution(bytes32 distributionId)
+        external
+        view
+        returns (address rewardToken, uint256 totalRewards, uint256 distributionTime);
 
     // Pause Functions
     function pause() external;
     function unpause() external;
+
+    function shareholders(address) external view returns (uint256 shares, bool isLocked, bool isActivated);
 }

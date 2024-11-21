@@ -9,13 +9,17 @@ import "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20BurnableUpgradeable.sol";
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
+import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "./IBurnVault.sol";
 
 contract BurnVault is
     Initializable,
     AccessControlUpgradeable,
     ReentrancyGuardUpgradeable,
     PausableUpgradeable,
-    OwnableUpgradeable
+    UUPSUpgradeable,
+    OwnableUpgradeable,
+    IBurnVault
 {
     using SafeERC20 for ERC20Upgradeable;
     using EnumerableSet for EnumerableSet.AddressSet;
@@ -37,10 +41,6 @@ contract BurnVault is
 
     // Accepted Tokens
     EnumerableSet.AddressSet private acceptedTokens;
-
-    event TokensDeposited(address indexed from, uint256 amount, uint256 timestamp);
-    event TokensBurned(address indexed account, uint256 amount);
-    event AcceptedTokenAdded(address indexed token);
 
     /**
      * @dev First initialization step - sets up roles
@@ -157,11 +157,19 @@ contract BurnVault is
     function _burn(address _account, uint256 _amount, ERC20BurnableUpgradeable _token) internal {
         Deposit storage deposit = deposits[_account];
         require(deposit.amount > 0, "BurnVault: no tokens to burn");
-        require(block.timestamp >= deposit.timestamp + BURN_DELAY, "BurnVault: burn delay not reached");
         require(deposit.amount >= _amount, "BurnVault: insufficient deposit balance");
         require(acceptedTokens.contains(address(_token)), "BurnVault: token not accepted");
         require(ERC20Upgradeable(_token).balanceOf(address(this)) >= _amount, "BurnVault: insufficient vault balance");
         require(_amount > 0, "BurnVault: amount must be greater than zero");
+
+        if (deposit.amount < _amount) {
+            revert InsufficientBalance(deposit.amount, _amount);
+        }
+
+        if (block.timestamp < deposit.timestamp + BURN_DELAY) {
+            // Not enough time has passed since the last deposit
+            revert TooEarlyToBurn();
+        }
 
         // Burn tokens held by vault
         _token.burn(_amount);
@@ -205,4 +213,7 @@ contract BurnVault is
     function isAcceptedToken(address _token) external view returns (bool) {
         return acceptedTokens.contains(_token);
     }
+
+    // === UUPS Functions ===
+    function _authorizeUpgrade(address newImplementation) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
 }
