@@ -1,6 +1,5 @@
-import { assert, expect } from 'chai';
+import { expect } from 'chai';
 import { ethers, upgrades } from 'hardhat';
-import { ethers as ethersLib } from 'ethers';
 import { Contract, ContractFactory, Signer } from 'ethers';
 import { BurnVault, MockERC20 } from '../typechain-types';
 
@@ -181,10 +180,6 @@ describe('BurnVault', function () {
       .updateAcceptedTokens(await mockERC20Token.getAddress());
 
     await mockERC20Token.mint(await user.getAddress(), 1000);
-    const tx = await mockERC20Token
-      .connect(user)
-      .approve(await burnVault.getAddress(), 1000);
-
     await expect(
       burnVault
         .connect(user)
