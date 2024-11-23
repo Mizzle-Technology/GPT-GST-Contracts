@@ -58,7 +58,7 @@ describe('GoldPackToken', function () {
     // console.log("GoldPackToken deployed to:", gptproxy);
 
     // Step 3: Set token in vault
-    await burnVault.connect(superAdmin).updateAcceptedTokens(gptproxy);
+    await burnVault.connect(admin).updateAcceptedTokens(gptproxy);
 
     // Set burn vault address in token
     await gpt.connect(superAdmin).setBurnVault(burnVaultProxy);
