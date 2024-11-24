@@ -253,9 +253,7 @@ contract SalesContractPresaleTest is Test {
     assertEq(salesContract.nonces(user), 1);
   }
 
-  function _getUserDigest(
-    ISalesContract.Order memory userOrder
-  ) internal view returns (bytes32) {
+  function _getUserDigest(ISalesContract.Order memory userOrder) internal view returns (bytes32) {
     bytes32 structHash = keccak256(
       abi.encode(
         salesContract.USER_ORDER_TYPEHASH(),
@@ -269,10 +267,7 @@ contract SalesContractPresaleTest is Test {
       )
     );
 
-    return
-      keccak256(
-        abi.encodePacked('\x19\x01', salesContract.DOMAIN_SEPARATOR(), structHash)
-      );
+    return keccak256(abi.encodePacked('\x19\x01', salesContract.DOMAIN_SEPARATOR(), structHash));
   }
 
   function _getRelayerDigest(
@@ -292,9 +287,6 @@ contract SalesContractPresaleTest is Test {
       )
     );
 
-    return
-      keccak256(
-        abi.encodePacked('\x19\x01', salesContract.DOMAIN_SEPARATOR(), structHash)
-      );
+    return keccak256(abi.encodePacked('\x19\x01', salesContract.DOMAIN_SEPARATOR(), structHash));
   }
 }

@@ -60,8 +60,8 @@ The **TradingVault** (`TradingVault.sol`) is a secure, upgradeable vault for man
 The **PriceCalculator** library calculates GPT token prices based on current gold prices and other payment token prices.
 
 - **Functions**:
-    - `calculateTokenAmount`: Calculates required tokens for a purchase.
-    - `getLatestPrices`: Fetches latest prices from Chainlink feeds.
+  - `calculateTokenAmount`: Calculates required tokens for a purchase.
+  - `getLatestPrices`: Fetches latest prices from Chainlink feeds.
 - **Dependencies**: `AggregatorV3Interface` from Chainlink.
 
 ---
@@ -72,13 +72,12 @@ The **PriceCalculator** library calculates GPT token prices based on current gol
 
 1. **Install Foundry**: Follow the [Foundry installation guide](https://book.getfoundry.sh/getting-started/installation) if not already installed.
 2. **Clone Repository**:
-    
-    ```bash
-    gh repo clone Mizzle-Technology/GPT-GST-Contracts
-    cd GPT-GST-Contracts
-    
-    ```
-    
+
+   ```bash
+   gh repo clone Mizzle-Technology/GPT-GST-Contracts
+   cd GPT-GST-Contracts
+
+   ```
 
 ### Install Dependencies
 
@@ -144,13 +143,13 @@ forge coverage
 ### Deploying Contracts
 
 1. **GPT Contract**:
-Deploy `GoldPackToken` first, specifying any required initialization arguments.
+   Deploy `GoldPackToken` first, specifying any required initialization arguments.
 2. **BurnVault and TradingVault**:
-Deploy each vault separately, initializing each with the appropriate roles and settings.
+   Deploy each vault separately, initializing each with the appropriate roles and settings.
 3. **Sales Contract**:
-Deploy `SalesContract` with required initial values, including `trustedSigner` and price feed addresses.
+   Deploy `SalesContract` with required initial values, including `trustedSigner` and price feed addresses.
 4. **Link Contracts**:
-Link `BurnVault` and `TradingVault` to `SalesContract` for secure management of token burning and withdrawals.
+   Link `BurnVault` and `TradingVault` to `SalesContract` for secure management of token burning and withdrawals.
 
 ### Interacting with Contracts
 

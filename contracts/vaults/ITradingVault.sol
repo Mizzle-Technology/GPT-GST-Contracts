@@ -36,10 +36,5 @@ interface ITradingVault {
   );
   event WithdrawalWalletUpdated(address indexed newWallet);
   event WithdrawalThresholdUpdated(uint256 indexed newThreshold);
-  event ImmediateWithdrawal(
-    address indexed token,
-    uint256 amount,
-    address to,
-    uint256 timestamp
-  );
+  event ImmediateWithdrawal(address indexed token, uint256 amount, address to, uint256 timestamp);
 }

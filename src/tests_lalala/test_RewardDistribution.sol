@@ -82,11 +82,7 @@ contract RewardDistributionTest is Test {
     assertTrue(rewardDistribution.hasRole(ADMIN_ROLE, admin));
 
     // Verify initial state
-    assertEq(
-      rewardDistribution.totalShares(),
-      1e18,
-      'Total shares should be initialized to SCALE'
-    );
+    assertEq(rewardDistribution.totalShares(), 1e18, 'Total shares should be initialized to SCALE');
   }
 
   function test_initialize_zero_super_admin_revert() public {
@@ -234,11 +230,7 @@ contract RewardDistributionTest is Test {
   function test_addRewardToken_non_admin_revert() public {
     vm.startPrank(nonAdmin);
     vm.expectRevert(
-      abi.encodeWithSelector(
-        AccessControlUnauthorizedAccount.selector,
-        nonAdmin,
-        ADMIN_ROLE
-      )
+      abi.encodeWithSelector(AccessControlUnauthorizedAccount.selector, nonAdmin, ADMIN_ROLE)
     );
     rewardDistribution.addRewardToken(address(rewardToken1));
     vm.stopPrank();
@@ -281,11 +273,7 @@ contract RewardDistributionTest is Test {
 
     vm.startPrank(nonAdmin);
     vm.expectRevert(
-      abi.encodeWithSelector(
-        AccessControlUnauthorizedAccount.selector,
-        nonAdmin,
-        ADMIN_ROLE
-      )
+      abi.encodeWithSelector(AccessControlUnauthorizedAccount.selector, nonAdmin, ADMIN_ROLE)
     );
     rewardDistribution.removeRewardToken(address(rewardToken1));
     vm.stopPrank();
@@ -341,11 +329,7 @@ contract RewardDistributionTest is Test {
   function test_topUpRewards_non_admin_revert() public {
     vm.startPrank(nonAdmin);
     vm.expectRevert(
-      abi.encodeWithSelector(
-        AccessControlUnauthorizedAccount.selector,
-        nonAdmin,
-        ADMIN_ROLE
-      )
+      abi.encodeWithSelector(AccessControlUnauthorizedAccount.selector, nonAdmin, ADMIN_ROLE)
     );
     rewardDistribution.topUpRewards(100e18, address(rewardToken1));
     vm.stopPrank();
@@ -363,11 +347,7 @@ contract RewardDistributionTest is Test {
     // Create distribution
     vm.startPrank(admin);
     uint256 distributionTime = block.timestamp + 100;
-    rewardDistribution.createDistribution(
-      address(rewardToken1),
-      1000e18,
-      distributionTime
-    );
+    rewardDistribution.createDistribution(address(rewardToken1), 1000e18, distributionTime);
     bytes32 distributionId = keccak256(
       abi.encodePacked(uint256(1000e18), distributionTime, block.timestamp)
     );
@@ -401,11 +381,7 @@ contract RewardDistributionTest is Test {
     vm.startPrank(admin);
     rewardDistribution.addRewardToken(address(rewardToken1));
     rewardToken1.mint(address(rewardDistribution), 1000e18);
-    rewardDistribution.createDistribution(
-      address(rewardToken1),
-      1000e18,
-      block.timestamp + 100
-    );
+    rewardDistribution.createDistribution(address(rewardToken1), 1000e18, block.timestamp + 100);
     bytes32 distributionId = keccak256(
       abi.encodePacked(uint256(1000e18), block.timestamp + 100, block.timestamp)
     );
@@ -424,11 +400,7 @@ contract RewardDistributionTest is Test {
     vm.startPrank(admin);
     rewardDistribution.addRewardToken(address(rewardToken1));
     rewardToken1.mint(address(rewardDistribution), 1000e18);
-    rewardDistribution.createDistribution(
-      address(rewardToken1),
-      1000e18,
-      block.timestamp + 100
-    );
+    rewardDistribution.createDistribution(address(rewardToken1), 1000e18, block.timestamp + 100);
     bytes32 distributionId = keccak256(
       abi.encodePacked(uint256(1000e18), block.timestamp + 100, block.timestamp)
     );
@@ -451,11 +423,7 @@ contract RewardDistributionTest is Test {
     vm.startPrank(admin);
     rewardDistribution.addRewardToken(address(rewardToken1));
     rewardToken1.mint(address(rewardDistribution), 1000e18);
-    rewardDistribution.createDistribution(
-      address(rewardToken1),
-      1000e18,
-      block.timestamp + 100
-    );
+    rewardDistribution.createDistribution(address(rewardToken1), 1000e18, block.timestamp + 100);
     bytes32 distributionId = keccak256(
       abi.encodePacked(uint256(1000e18), block.timestamp + 100, block.timestamp)
     );
@@ -483,19 +451,11 @@ contract RewardDistributionTest is Test {
     rewardToken1.mint(address(rewardDistribution), 1000e18);
     rewardToken2.mint(address(rewardDistribution), 2000e18);
 
-    rewardDistribution.createDistribution(
-      address(rewardToken1),
-      1000e18,
-      block.timestamp + 100
-    );
+    rewardDistribution.createDistribution(address(rewardToken1), 1000e18, block.timestamp + 100);
     bytes32 distributionId1 = keccak256(
       abi.encodePacked(uint256(1000e18), block.timestamp + 100, block.timestamp)
     );
-    rewardDistribution.createDistribution(
-      address(rewardToken2),
-      2000e18,
-      block.timestamp + 200
-    );
+    rewardDistribution.createDistribution(address(rewardToken2), 2000e18, block.timestamp + 200);
     bytes32 distributionId2 = keccak256(
       abi.encodePacked(uint256(1000e18), block.timestamp + 200, block.timestamp)
     );
@@ -532,11 +492,7 @@ contract RewardDistributionTest is Test {
     vm.startPrank(admin);
     rewardDistribution.addRewardToken(address(rewardToken1));
     rewardToken1.mint(address(rewardDistribution), 1000e18);
-    rewardDistribution.createDistribution(
-      address(rewardToken1),
-      1000e18,
-      block.timestamp + 100
-    );
+    rewardDistribution.createDistribution(address(rewardToken1), 1000e18, block.timestamp + 100);
     // bytes32 distributionId = keccak256(abi.encodePacked(uint256(1000e18), block.timestamp + 100, block.timestamp));
     rewardDistribution.allocateShares(shareholder1, 500e18);
     rewardDistribution.lockRewards(shareholder1);
@@ -600,11 +556,7 @@ contract RewardDistributionTest is Test {
   function test_lockRewards_non_admin_revert() public {
     vm.startPrank(nonAdmin);
     vm.expectRevert(
-      abi.encodeWithSelector(
-        AccessControlUnauthorizedAccount.selector,
-        nonAdmin,
-        ADMIN_ROLE
-      )
+      abi.encodeWithSelector(AccessControlUnauthorizedAccount.selector, nonAdmin, ADMIN_ROLE)
     );
     rewardDistribution.lockRewards(shareholder1);
     vm.stopPrank();
@@ -619,11 +571,7 @@ contract RewardDistributionTest is Test {
     // Attempt to unlock by non-admin
     vm.startPrank(nonAdmin);
     vm.expectRevert(
-      abi.encodeWithSelector(
-        AccessControlUnauthorizedAccount.selector,
-        nonAdmin,
-        ADMIN_ROLE
-      )
+      abi.encodeWithSelector(AccessControlUnauthorizedAccount.selector, nonAdmin, ADMIN_ROLE)
     );
     rewardDistribution.unlockRewards(shareholder1);
     vm.stopPrank();
@@ -643,24 +591,13 @@ contract RewardDistributionTest is Test {
     );
     emit RewardsDistributed(distributionId, 1000e18);
 
-    rewardDistribution.createDistribution(
-      address(rewardToken1),
-      1000e18,
-      distributionTime_1
-    );
+    rewardDistribution.createDistribution(address(rewardToken1), 1000e18, distributionTime_1);
     vm.stopPrank();
 
-    (
-      address rewardToken,
-      uint256 totalRewards,
-      uint256 distributionTime
-    ) = rewardDistribution.getDistribution(distributionId);
+    (address rewardToken, uint256 totalRewards, uint256 distributionTime) = rewardDistribution
+      .getDistribution(distributionId);
     assertEq(totalRewards, 1000e18, 'Total rewards should be 1000e18');
-    assertEq(
-      distributionTime,
-      distributionTime,
-      'Distribution time should be set correctly'
-    );
+    assertEq(distributionTime, distributionTime, 'Distribution time should be set correctly');
     assertEq(rewardToken, address(rewardToken1), 'Reward token should be set correctly');
   }
 
@@ -668,11 +605,7 @@ contract RewardDistributionTest is Test {
     vm.startPrank(admin);
     rewardDistribution.addRewardToken(address(rewardToken1));
     vm.expectRevert(bytes('Invalid reward amount'));
-    rewardDistribution.createDistribution(
-      address(rewardToken1),
-      0,
-      block.timestamp + 100
-    );
+    rewardDistribution.createDistribution(address(rewardToken1), 0, block.timestamp + 100);
     vm.stopPrank();
   }
 
@@ -681,11 +614,7 @@ contract RewardDistributionTest is Test {
     rewardDistribution.addRewardToken(address(rewardToken1));
     rewardToken1.mint(address(rewardDistribution), 1000e18);
     vm.expectRevert(bytes('Distribution time must be in the future'));
-    rewardDistribution.createDistribution(
-      address(rewardToken1),
-      500e18,
-      block.timestamp - 10
-    );
+    rewardDistribution.createDistribution(address(rewardToken1), 500e18, block.timestamp - 10);
     vm.stopPrank();
   }
 
@@ -694,11 +623,7 @@ contract RewardDistributionTest is Test {
     rewardDistribution.addRewardToken(address(rewardToken1));
     rewardToken1.mint(address(rewardDistribution), 500e18);
     vm.expectRevert(bytes('Insufficient funds'));
-    rewardDistribution.createDistribution(
-      address(rewardToken1),
-      1000e18,
-      block.timestamp + 100
-    );
+    rewardDistribution.createDistribution(address(rewardToken1), 1000e18, block.timestamp + 100);
     vm.stopPrank();
   }
 
@@ -708,28 +633,16 @@ contract RewardDistributionTest is Test {
     rewardToken1.mint(address(rewardDistribution), 1000e18);
     rewardDistribution.pause();
     vm.expectRevert('Pausable: paused');
-    rewardDistribution.createDistribution(
-      address(rewardToken1),
-      500e18,
-      block.timestamp + 100
-    );
+    rewardDistribution.createDistribution(address(rewardToken1), 500e18, block.timestamp + 100);
     vm.stopPrank();
   }
 
   function test_createDistribution_non_admin_revert() public {
     vm.startPrank(nonAdmin);
     vm.expectRevert(
-      abi.encodeWithSelector(
-        AccessControlUnauthorizedAccount.selector,
-        nonAdmin,
-        ADMIN_ROLE
-      )
+      abi.encodeWithSelector(AccessControlUnauthorizedAccount.selector, nonAdmin, ADMIN_ROLE)
     );
-    rewardDistribution.createDistribution(
-      address(rewardToken1),
-      500e18,
-      block.timestamp + 100
-    );
+    rewardDistribution.createDistribution(address(rewardToken1), 500e18, block.timestamp + 100);
     vm.stopPrank();
   }
 
@@ -748,11 +661,7 @@ contract RewardDistributionTest is Test {
   function test_pause_non_admin_revert() public {
     vm.startPrank(admin);
     vm.expectRevert(
-      abi.encodeWithSelector(
-        AccessControlUnauthorizedAccount.selector,
-        admin,
-        DEFAULT_ADMIN_ROLE
-      )
+      abi.encodeWithSelector(AccessControlUnauthorizedAccount.selector, admin, DEFAULT_ADMIN_ROLE)
     );
     rewardDistribution.pause();
     vm.stopPrank();
@@ -779,11 +688,7 @@ contract RewardDistributionTest is Test {
     // Attempt to unpause by non-admin
     vm.startPrank(admin);
     vm.expectRevert(
-      abi.encodeWithSelector(
-        AccessControlUnauthorizedAccount.selector,
-        admin,
-        DEFAULT_ADMIN_ROLE
-      )
+      abi.encodeWithSelector(AccessControlUnauthorizedAccount.selector, admin, DEFAULT_ADMIN_ROLE)
     );
     rewardDistribution.unpause();
     vm.stopPrank();
@@ -794,21 +699,14 @@ contract RewardDistributionTest is Test {
   function test_upgradeToV2_success() public {
     // Upgrade the contract
     vm.startPrank(superAdmin);
-    Upgrades.upgradeProxy(
-      rewardDistributionProxy,
-      'RewardDistributionV2.sol:RewardDistributionV2'
-    );
+    Upgrades.upgradeProxy(rewardDistributionProxy, 'RewardDistributionV2.sol:RewardDistributionV2');
     RewardDistributionV2 v2_impl = RewardDistributionV2(rewardDistributionProxy);
     vm.stopPrank();
 
     // Verify upgrade by calling a new function from V2
     RewardDistributionV2 upgradedContract = RewardDistributionV2(rewardDistributionProxy);
     upgradedContract.setNewVariable(12345);
-    assertEq(
-      upgradedContract.getNewVariable(),
-      12345,
-      'New variable should be set correctly'
-    );
+    assertEq(upgradedContract.getNewVariable(), 12345, 'New variable should be set correctly');
   }
 
   // function test_upgradeToV2_non_admin_revert() public {

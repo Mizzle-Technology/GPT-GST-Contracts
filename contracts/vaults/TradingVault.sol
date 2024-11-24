@@ -41,11 +41,7 @@ contract TradingVault is
   uint256 public WITHDRAWAL_THRESHOLD; // 100k USDC
   mapping(bytes32 => WithdrawalRequest) public withdrawalRequests;
 
-  function initialize(
-    address _safeWallet,
-    address _admin,
-    address _super
-  ) public initializer {
+  function initialize(address _safeWallet, address _admin, address _super) public initializer {
     __AccessControl_init();
     __ReentrancyGuard_init();
     __Pausable_init();
@@ -143,9 +139,7 @@ contract TradingVault is
    * require The current block timestamp must be greater than or equal to the request time plus the withdrawal delay.
    * emit WithdrawalExecuted Emitted when a withdrawal request is successfully executed.
    */
-  function executeWithdrawal(
-    bytes32 requestId
-  ) external onlyAdmin whenNotPaused nonReentrant {
+  function executeWithdrawal(bytes32 requestId) external onlyAdmin whenNotPaused nonReentrant {
     WithdrawalRequest storage request = withdrawalRequests[requestId];
     // if request id does not exist, it will revert
     if (request.amount == 0) {
@@ -194,9 +188,7 @@ contract TradingVault is
    * require The current block timestamp must be less than the request expiry time.
    * emit WithdrawalCancelled Emitted when a withdrawal request is successfully cancelled.
    */
-  function cancelWithdrawal(
-    bytes32 requestId
-  ) external onlyAdmin whenNotPaused nonReentrant {
+  function cancelWithdrawal(bytes32 requestId) external onlyAdmin whenNotPaused nonReentrant {
     WithdrawalRequest storage request = withdrawalRequests[requestId];
     if (request.amount == 0) {
       revert Errors.WithdrawalRequestNotFound(requestId);
@@ -235,10 +227,7 @@ contract TradingVault is
    * require The amount must be greater than 0.
    * emit ImmediateWithdrawal Emitted when a withdrawal request is successfully executed.
    */
-  function withdraw(
-    address token,
-    uint256 amount
-  ) external onlyAdmin whenNotPaused nonReentrant {
+  function withdraw(address token, uint256 amount) external onlyAdmin whenNotPaused nonReentrant {
     require(safeWallet != address(0), 'Invalid withdrawal wallet address');
     require(amount <= WITHDRAWAL_THRESHOLD, 'Amount exceeds threshold');
 
@@ -271,9 +260,7 @@ contract TradingVault is
    * @param _safeWallet The address of the new withdrawal wallet.
    * @return success A boolean value indicating whether the wallet address was successfully updated.
    */
-  function setWithdrawalWallet(
-    address _safeWallet
-  ) external onlyDefaultAdmin returns (bool) {
+  function setWithdrawalWallet(address _safeWallet) external onlyDefaultAdmin returns (bool) {
     require(_safeWallet != address(0), 'Invalid wallet address');
     require(safeWallet != _safeWallet, 'Same wallet address');
     safeWallet = _safeWallet;
@@ -287,9 +274,7 @@ contract TradingVault is
    * @param _threshold The new threshold amount for immediate withdrawals.
    * @return success A boolean value indicating whether the threshold was successfully updated.
    */
-  function setWithdrawalThreshold(
-    uint256 _threshold
-  ) external onlyDefaultAdmin returns (bool) {
+  function setWithdrawalThreshold(uint256 _threshold) external onlyDefaultAdmin returns (bool) {
     require(_threshold > 0, 'Threshold must be greater than 0');
     require(WITHDRAWAL_THRESHOLD != _threshold, 'Same threshold');
 
@@ -309,7 +294,5 @@ contract TradingVault is
   }
 
   // === UUPS Upgrade ===
-  function _authorizeUpgrade(
-    address newImplementation
-  ) internal override onlyDefaultAdmin {}
+  function _authorizeUpgrade(address newImplementation) internal override onlyDefaultAdmin {}
 }

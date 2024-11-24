@@ -59,11 +59,7 @@ contract GoldPackToken is
    * Requirements:
    * - _super, _admin, and _sales_manager cannot be the zero address
    */
-  function initialize(
-    address _super,
-    address _admin,
-    address _sales_manager
-  ) public initializer {
+  function initialize(address _super, address _admin, address _sales_manager) public initializer {
     __ERC20_init('Gold Pack Token', 'GPT');
     __ERC20Burnable_init();
     __AccessControl_init();
@@ -108,23 +104,15 @@ contract GoldPackToken is
    * Requirements:
    * - Only callable by owner
    */
-  function mint(
-    address to,
-    uint256 amount
-  ) external override whenNotPaused onlySalesRole {
+  function mint(address to, uint256 amount) external override whenNotPaused onlySalesRole {
     _mint(to, amount);
     emit Mint(to, amount);
   }
 
   // == Burn Vault Functions ==
 
-  function setBurnVault(
-    address _burnVault
-  ) external whenNotPaused onlyRole(DEFAULT_ADMIN_ROLE) {
-    require(
-      _burnVault != address(0),
-      'GoldPackToken: burn vault cannot be the zero address'
-    );
+  function setBurnVault(address _burnVault) external whenNotPaused onlyRole(DEFAULT_ADMIN_ROLE) {
+    require(_burnVault != address(0), 'GoldPackToken: burn vault cannot be the zero address');
     burnVault = BurnVault(_burnVault);
 
     emit BurnVaultSet(_burnVault);
@@ -137,9 +125,7 @@ contract GoldPackToken is
    * - Amount must be a multiple of TOKENS_PER_TROY_OUNCE (10000)
    * - Amount must be greater than 0
    */
-  function depositToBurnVault(
-    uint256 amount
-  ) external override nonReentrant whenNotPaused {
+  function depositToBurnVault(uint256 amount) external override nonReentrant whenNotPaused {
     require(amount > 0, 'GoldPackToken: amount must be greater than 0');
     require(
       amount % TOKENS_PER_TROY_OUNCE == 0,

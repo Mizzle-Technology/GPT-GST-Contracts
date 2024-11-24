@@ -86,17 +86,12 @@ contract HaloLabsCoin is
     address from,
     address to,
     uint256 amount
-  )
-    internal
-    override(ERC20Upgradeable, ERC20CappedUpgradeable, ERC20PausableUpgradeable)
-  {
+  ) internal override(ERC20Upgradeable, ERC20CappedUpgradeable, ERC20PausableUpgradeable) {
     super._update(from, to, amount);
   }
 
   // Authorize upgrade function required by UUPSUpgradeable
-  function _authorizeUpgrade(
-    address newImplementation
-  ) internal override onlyRole(ADMIN_ROLE) {}
+  function _authorizeUpgrade(address newImplementation) internal override onlyRole(ADMIN_ROLE) {}
 
   // Pause and unpause functions
   function pause() external onlyRole(ADMIN_ROLE) {

@@ -16,11 +16,7 @@ interface IBurnVault {
     uint256 amount,
     ERC20BurnableUpgradeable _token
   ) external;
-  function burnTokens(
-    address _account,
-    uint256 _amount,
-    ERC20BurnableUpgradeable _token
-  ) external;
+  function burnTokens(address _account, uint256 _amount, ERC20BurnableUpgradeable _token) external;
   function burnAllTokens(address _account, ERC20BurnableUpgradeable _token) external;
   function getBalance(address account) external view returns (uint256);
   function isAcceptedToken(address _token) external view returns (bool);

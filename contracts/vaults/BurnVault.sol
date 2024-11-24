@@ -179,11 +179,7 @@ contract BurnVault is
     _burn(_account, deposits[_account].amount, _token);
   }
 
-  function _burn(
-    address _account,
-    uint256 _amount,
-    ERC20BurnableUpgradeable _token
-  ) internal {
+  function _burn(address _account, uint256 _amount, ERC20BurnableUpgradeable _token) internal {
     Deposit storage deposit = deposits[_account];
     require(deposit.amount > 0, 'BurnVault: no tokens to burn');
     require(deposit.amount >= _amount, 'BurnVault: insufficient deposit balance');
@@ -247,7 +243,5 @@ contract BurnVault is
   }
 
   // === UUPS Functions ===
-  function _authorizeUpgrade(
-    address newImplementation
-  ) internal override onlySuperAdmin {}
+  function _authorizeUpgrade(address newImplementation) internal override onlySuperAdmin {}
 }

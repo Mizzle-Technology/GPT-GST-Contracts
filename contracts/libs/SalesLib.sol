@@ -21,9 +21,7 @@ library SalesLib {
     address buyer,
     bytes memory signature
   ) internal view returns (bool) {
-    bytes32 digest = keccak256(
-      abi.encodePacked('\x19\x01', domainSeparator, userOrderHash)
-    );
+    bytes32 digest = keccak256(abi.encodePacked('\x19\x01', domainSeparator, userOrderHash));
     return SignatureChecker.isValidSignatureNow(buyer, digest, signature);
   }
 
@@ -33,9 +31,7 @@ library SalesLib {
     address trustedSigner,
     bytes memory relayerSignature
   ) internal view returns (bool) {
-    bytes32 digest = keccak256(
-      abi.encodePacked('\x19\x01', domainSeparator, relayerOrderHash)
-    );
+    bytes32 digest = keccak256(abi.encodePacked('\x19\x01', domainSeparator, relayerOrderHash));
     return SignatureChecker.isValidSignatureNow(trustedSigner, digest, relayerSignature);
   }
 
@@ -75,11 +71,7 @@ library SalesLib {
     uint256 allowance = ERC20Upgradeable(paymentToken).allowance(buyer, address(this));
     require(allowance >= tokenAmount, 'Token allowance too low');
 
-    ERC20Upgradeable(paymentToken).safeTransferFrom(
-      buyer,
-      address(tradingVault),
-      tokenAmount
-    );
+    ERC20Upgradeable(paymentToken).safeTransferFrom(buyer, address(tradingVault), tokenAmount);
     round.tokensSold += amount;
     gptToken.mint(buyer, amount);
   }

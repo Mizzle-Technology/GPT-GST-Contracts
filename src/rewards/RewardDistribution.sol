@@ -146,10 +146,7 @@ contract RewardDistribution is
 
     // Calculate new total shares and validate
     uint256 updatedTotalShares = totalShares - oldShares + newShares;
-    require(
-      updatedTotalShares <= SCALE,
-      'RewardDistribution: total shares exceed maximum'
-    );
+    require(updatedTotalShares <= SCALE, 'RewardDistribution: total shares exceed maximum');
 
     // === Effects ===
     if (oldShares == 0 && newShares > 0) {
@@ -248,18 +245,10 @@ contract RewardDistribution is
    * - Caller must have shares allocated.
    * - There must be claimable rewards available.
    */
-  function claimReward(
-    bytes32 distributionId
-  ) external override nonReentrant whenNotPaused {
+  function claimReward(bytes32 distributionId) external override nonReentrant whenNotPaused {
     Distribution storage distribution = distributions[distributionId];
-    require(
-      !distribution.claimed[msg.sender],
-      'Rewards already claimed for this distribution'
-    );
-    require(
-      block.timestamp >= distribution.distributionTime,
-      'Rewards not yet claimable'
-    );
+    require(!distribution.claimed[msg.sender], 'Rewards already claimed for this distribution');
+    require(block.timestamp >= distribution.distributionTime, 'Rewards not yet claimable');
 
     Shareholder storage shareholder = shareholders[msg.sender];
     require(shareholder.isActivated, 'Shareholder not activated');
@@ -272,12 +261,7 @@ contract RewardDistribution is
     ERC20Upgradeable rewardToken = ERC20Upgradeable(distribution.rewardToken);
     rewardToken.safeTransfer(msg.sender, rewardAmount);
 
-    emit RewardsClaimed(
-      msg.sender,
-      rewardAmount,
-      distribution.rewardToken,
-      distributionId
-    );
+    emit RewardsClaimed(msg.sender, rewardAmount, distribution.rewardToken, distributionId);
   }
 
   function claimAllRewards() external override nonReentrant whenNotPaused {
@@ -289,22 +273,14 @@ contract RewardDistribution is
 
     while (currentId != bytes32(0)) {
       Distribution storage distribution = distributions[currentId];
-      if (
-        !distribution.claimed[msg.sender] &&
-        block.timestamp >= distribution.distributionTime
-      ) {
+      if (!distribution.claimed[msg.sender] && block.timestamp >= distribution.distributionTime) {
         uint256 rewardAmount = (distribution.totalRewards * shareholder.shares) / SCALE;
         distribution.claimed[msg.sender] = true;
 
         ERC20Upgradeable rewardToken = ERC20Upgradeable(distribution.rewardToken);
         rewardToken.safeTransfer(msg.sender, rewardAmount);
 
-        emit RewardsClaimed(
-          msg.sender,
-          rewardAmount,
-          distribution.rewardToken,
-          currentId
-        );
+        emit RewardsClaimed(msg.sender, rewardAmount, distribution.rewardToken, currentId);
       }
       currentId = distributionList.next(currentId);
     }
@@ -367,10 +343,7 @@ contract RewardDistribution is
     uint256 distributionTime
   ) external override onlyRole(ADMIN_ROLE) whenNotPaused {
     require(totalRewards > 0, 'Invalid reward amount');
-    require(
-      distributionTime > block.timestamp,
-      'Distribution time must be in the future'
-    );
+    require(distributionTime > block.timestamp, 'Distribution time must be in the future');
 
     ERC20Upgradeable rewardToken = ERC20Upgradeable(token);
     require(rewardToken.balanceOf(address(this)) >= totalRewards, 'Insufficient funds');
@@ -434,10 +407,6 @@ contract RewardDistribution is
     returns (address rewardToken, uint256 totalRewards, uint256 distributionTime)
   {
     Distribution storage distribution = distributions[distributionId];
-    return (
-      distribution.rewardToken,
-      distribution.totalRewards,
-      distribution.distributionTime
-    );
+    return (distribution.rewardToken, distribution.totalRewards, distribution.distributionTime);
   }
 }

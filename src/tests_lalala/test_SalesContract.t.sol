@@ -124,10 +124,7 @@ contract SalesContractTest is Test {
 
     // Grant SALES_ROLE to SalesContract
     //console.log("Granting SALES_ROLE to SalesContract");
-    GoldPackToken(gptProxy).grantRole(
-      GoldPackToken(gptProxy).SALES_ROLE(),
-      address(salesContract)
-    );
+    GoldPackToken(gptProxy).grantRole(GoldPackToken(gptProxy).SALES_ROLE(), address(salesContract));
     //console.log("SALES_ROLE granted to SalesContract");
 
     // bool hasRole = gptToken.hasRole(gptToken.SALES_ROLE(), address(salesContract));
@@ -581,9 +578,7 @@ contract SalesContractTest is Test {
     assertEq(salesContract.nonces(user), 2); // Nonce incremented twice
   }
 
-  function _getUserDigest(
-    SalesContract.Order memory order
-  ) internal view returns (bytes32) {
+  function _getUserDigest(SalesContract.Order memory order) internal view returns (bytes32) {
     bytes32 structHash = keccak256(
       abi.encode(
         salesContract.USER_ORDER_TYPEHASH(),
@@ -597,15 +592,10 @@ contract SalesContractTest is Test {
       )
     );
 
-    return
-      keccak256(
-        abi.encodePacked('\x19\x01', salesContract.DOMAIN_SEPARATOR(), structHash)
-      );
+    return keccak256(abi.encodePacked('\x19\x01', salesContract.DOMAIN_SEPARATOR(), structHash));
   }
 
-  function _getRelayerDigest(
-    SalesContract.Order memory order
-  ) internal view returns (bytes32) {
+  function _getRelayerDigest(SalesContract.Order memory order) internal view returns (bytes32) {
     bytes32 structHash = keccak256(
       abi.encode(
         salesContract.RELAYER_ORDER_TYPEHASH(),
@@ -620,9 +610,6 @@ contract SalesContractTest is Test {
       )
     );
 
-    return
-      keccak256(
-        abi.encodePacked('\x19\x01', salesContract.DOMAIN_SEPARATOR(), structHash)
-      );
+    return keccak256(abi.encodePacked('\x19\x01', salesContract.DOMAIN_SEPARATOR(), structHash));
   }
 }

@@ -45,10 +45,7 @@ interface IRewardDistribution {
   ) external;
   function getDistribution(
     bytes32 distributionId
-  )
-    external
-    view
-    returns (address rewardToken, uint256 totalRewards, uint256 distributionTime);
+  ) external view returns (address rewardToken, uint256 totalRewards, uint256 distributionTime);
 
   // Pause Functions
   function pause() external;

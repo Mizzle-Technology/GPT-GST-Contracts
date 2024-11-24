@@ -111,11 +111,7 @@ contract ReentrantERC20 is ERC20Upgradeable, ERC20BurnableUpgradeable {
   }
 
   // Override transferFrom to include a callback for reentrancy
-  function transferFrom(
-    address from,
-    address to,
-    uint256 amount
-  ) public override returns (bool) {
+  function transferFrom(address from, address to, uint256 amount) public override returns (bool) {
     // Normal transferFrom logic
     _spendAllowance(from, _msgSender(), amount);
     _transfer(from, to, amount);

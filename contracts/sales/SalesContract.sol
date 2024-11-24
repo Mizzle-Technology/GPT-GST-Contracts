@@ -48,9 +48,7 @@ contract SalesContract is
   bytes32 public constant ADMIN_ROLE = keccak256('ADMIN_ROLE');
   bytes32 public constant SALES_ROLE = keccak256('SALES_ROLE');
   bytes32 private constant DOMAIN_TYPE_HASH =
-    keccak256(
-      'EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)'
-    );
+    keccak256('EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)');
   bytes32 public constant USER_ORDER_TYPEHASH =
     keccak256(
       'Order(uint256 roundId,address buyer,uint256 gptAmount,uint256 nonce,uint256 expiry,address paymentToken,uint256 chainId)'
@@ -227,9 +225,7 @@ contract SalesContract is
    * @notice Allows a whitelisted address to make a purchase during the presale stage.
    * @param order The amount of tokens to purchase.
    */
-  function preSalePurchase(
-    Order calldata order
-  ) external override nonReentrant whenNotPaused {
+  function preSalePurchase(Order calldata order) external override nonReentrant whenNotPaused {
     require(currentStage == SaleStage.PreSale, 'Presale not active');
     require(whitelistedAddresses[msg.sender], 'Not whitelisted');
     require(order.buyer == msg.sender, 'Buyer mismatch'); // Added buyer verification
@@ -312,9 +308,7 @@ contract SalesContract is
    * @notice Allows an authorized purchase during the public sale stage using a signature.
    * @param order The order struct containing the purchase details.
    */
-  function authorizePurchase(
-    Order calldata order
-  ) external override nonReentrant whenNotPaused {
+  function authorizePurchase(Order calldata order) external override nonReentrant whenNotPaused {
     require(currentStage == SaleStage.PublicSale, 'Public sale not active');
     require(order.nonce == nonces[order.buyer], 'Invalid nonce');
     require(block.timestamp <= order.expiry, 'Signature expired');
@@ -420,10 +414,7 @@ contract SalesContract is
   ) external override onlyRole(DEFAULT_ADMIN_ROLE) {
     require(token != address(gptToken), 'Cannot recover GPT token');
     require(amount > 0, 'Amount must be greater than 0');
-    require(
-      ERC20Upgradeable(token).balanceOf(address(this)) >= amount,
-      'Insufficient balance'
-    );
+    require(ERC20Upgradeable(token).balanceOf(address(this)) >= amount, 'Insufficient balance');
 
     // check allowance
     uint256 allowance = ERC20Upgradeable(token).allowance(address(this), msg.sender);
