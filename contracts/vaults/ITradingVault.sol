@@ -3,7 +3,7 @@ pragma solidity 0.8.28;
 
 // Trading Vault Interface
 interface ITradingVault {
-  function queueWithdrawal(address token, uint256 amount) external;
+  function queueWithdrawal(address token, uint256 amount) external returns (bytes32);
   function executeWithdrawal(bytes32 requestId) external;
   function cancelWithdrawal(bytes32 requestId) external;
   function withdraw(address token, uint256 amount) external;

@@ -89,7 +89,7 @@ contract TradingVault is
   function queueWithdrawal(
     address token,
     uint256 amount
-  ) external onlyAdmin whenNotPaused nonReentrant {
+  ) external override onlyAdmin whenNotPaused nonReentrant returns (bytes32) {
     bytes32 requestId = keccak256(abi.encodePacked(token, amount, block.timestamp));
 
     if (withdrawalRequests[requestId].amount > 0) {
@@ -126,6 +126,8 @@ contract TradingVault is
       block.timestamp,
       block.timestamp + WITHDRAWAL_DELAY
     );
+
+    return requestId;
   }
 
   /**
@@ -151,11 +153,11 @@ contract TradingVault is
     }
 
     if (request.executed) {
-      revert Errors.WithdrawalRequestExecuted(requestId);
+      revert Errors.WithdrawalAlreadyExecuted(requestId);
     }
 
     if (request.cancelled) {
-      revert Errors.WithdrawalRequestAlreadyCancelled(requestId);
+      revert Errors.WithdrawalAlreadyCancelled(requestId);
     }
 
     uint256 contractBalance = ERC20Upgradeable(request.token).balanceOf(address(this));
@@ -201,11 +203,11 @@ contract TradingVault is
     }
 
     if (request.executed) {
-      revert Errors.WithdrawalRequestExecuted(requestId);
+      revert Errors.WithdrawalAlreadyExecuted(requestId);
     }
 
     if (request.cancelled) {
-      revert Errors.WithdrawalRequestAlreadyCancelled(requestId);
+      revert Errors.WithdrawalAlreadyCancelled(requestId);
     }
 
     if (block.timestamp < request.requestTime + WITHDRAWAL_DELAY) {

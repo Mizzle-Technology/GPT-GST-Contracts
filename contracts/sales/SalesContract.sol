@@ -11,12 +11,12 @@ import '@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol';
 import '@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol';
 import '@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol';
 // Chainlink imports
-import '@chainlink/shared/interfaces/AggregatorV3Interface.sol';
+import '@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol';
 
 // Local imports
 import '../tokens/GoldPackToken.sol';
 import '../libs/SalesLib.sol';
-import '../vault/TradingVault.sol';
+import '../vaults/TradingVault.sol';
 import './ISalesContract.sol';
 
 /**

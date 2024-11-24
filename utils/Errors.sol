@@ -19,8 +19,8 @@ library Errors {
   // TradingVault errors
   error DuplicatedWithdrawalRequest(bytes32 requestId);
   error WithdrawalRequestNotFound(bytes32 requestId);
-  error WithdrawalRequestExecuted(bytes32 requestId);
-  error WithdrawalRequestAlreadyCancelled(bytes32 requestId);
+  error WithdrawalAlreadyExecuted(bytes32 requestId);
+  error WithdrawalAlreadyCancelled(bytes32 requestId);
   error WithdrawalDelayNotMet(bytes32 requestId);
   error WithdrawalThresholdNotMet(uint256 amount, uint256 threshold);
   error SafeWalletNotSet();
