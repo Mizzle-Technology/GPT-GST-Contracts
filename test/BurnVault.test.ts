@@ -36,19 +36,13 @@ describe('BurnVault', function () {
   // 1. Initialization Tests
 
   it('should initialize successfully', async function () {
-    await burnVault
-      .connect(admin)
-      .updateAcceptedTokens(await mockERC20Token.getAddress());
+    await burnVault.connect(admin).updateAcceptedTokens(await mockERC20Token.getAddress());
 
     expect(
-      await burnVault.hasRole(
-        await burnVault.DEFAULT_ADMIN_ROLE(),
-        await superAdmin.getAddress(),
-      ),
+      await burnVault.hasRole(await burnVault.DEFAULT_ADMIN_ROLE(), await superAdmin.getAddress()),
     ).to.be.true;
-    expect(
-      await burnVault.hasRole(await burnVault.ADMIN_ROLE(), await admin.getAddress()),
-    ).to.be.true;
+    expect(await burnVault.hasRole(await burnVault.ADMIN_ROLE(), await admin.getAddress())).to.be
+      .true;
 
     expect(await burnVault.isAcceptedToken(await mockERC20Token.getAddress())).to.be.true;
   });
@@ -56,22 +50,20 @@ describe('BurnVault', function () {
   it('should revert initialization with zero super admin', async function () {
     const BurnVaultFactory = await ethers.getContractFactory('BurnVault', superAdmin);
     await expect(
-      upgrades.deployProxy(
-        BurnVaultFactory,
-        [ethers.ZeroAddress, await admin.getAddress()],
-        { initializer: 'initialize', kind: 'uups' },
-      ),
+      upgrades.deployProxy(BurnVaultFactory, [ethers.ZeroAddress, await admin.getAddress()], {
+        initializer: 'initialize',
+        kind: 'uups',
+      }),
     ).to.be.revertedWithCustomError(burnVault, 'AddressCannotBeZero');
   });
 
   it('should revert initialization with zero admin', async function () {
     const BurnVaultFactory = await ethers.getContractFactory('BurnVault', superAdmin);
     await expect(
-      upgrades.deployProxy(
-        BurnVaultFactory,
-        [await superAdmin.getAddress(), ethers.ZeroAddress],
-        { initializer: 'initialize', kind: 'uups' },
-      ),
+      upgrades.deployProxy(BurnVaultFactory, [await superAdmin.getAddress(), ethers.ZeroAddress], {
+        initializer: 'initialize',
+        kind: 'uups',
+      }),
     ).to.be.revertedWithCustomError(burnVault, 'AddressCannotBeZero');
   });
 
@@ -108,9 +100,7 @@ describe('BurnVault', function () {
   });
 
   it('should set a new token successfully', async function () {
-    await burnVault
-      .connect(admin)
-      .updateAcceptedTokens(await mockERC20Token.getAddress());
+    await burnVault.connect(admin).updateAcceptedTokens(await mockERC20Token.getAddress());
 
     const newToken = (await MockERC20.deploy()) as unknown as Contract;
     await newToken.initialize('NewToken', 'NTK', 18);
@@ -130,30 +120,23 @@ describe('BurnVault', function () {
   // 3. Access Control Tests
 
   it('should verify default admin role', async function () {
-    expect(
-      await burnVault.hasRole(
-        await burnVault.DEFAULT_ADMIN_ROLE(),
-        superAdmin.getAddress(),
-      ),
-    ).to.be.true;
+    expect(await burnVault.hasRole(await burnVault.DEFAULT_ADMIN_ROLE(), superAdmin.getAddress()))
+      .to.be.true;
   });
 
   it('should verify admin role', async function () {
-    expect(
-      await burnVault.hasRole(await burnVault.ADMIN_ROLE(), await admin.getAddress()),
-    ).to.be.true;
+    expect(await burnVault.hasRole(await burnVault.ADMIN_ROLE(), await admin.getAddress())).to.be
+      .true;
   });
 
   it('should grant and revoke admin role', async function () {
     await burnVault.grantRole(await burnVault.ADMIN_ROLE(), await newAdmin.getAddress());
-    expect(
-      await burnVault.hasRole(await burnVault.ADMIN_ROLE(), await newAdmin.getAddress()),
-    ).to.be.true;
+    expect(await burnVault.hasRole(await burnVault.ADMIN_ROLE(), await newAdmin.getAddress())).to.be
+      .true;
 
     await burnVault.revokeRole(await burnVault.ADMIN_ROLE(), await newAdmin.getAddress());
-    expect(
-      await burnVault.hasRole(await burnVault.ADMIN_ROLE(), await newAdmin.getAddress()),
-    ).to.be.false;
+    expect(await burnVault.hasRole(await burnVault.ADMIN_ROLE(), await newAdmin.getAddress())).to.be
+      .false;
   });
 
   // 4. Pausable Functionality Tests
@@ -175,9 +158,7 @@ describe('BurnVault', function () {
   // 5. Deposit Functionality Tests
 
   it('should deposit tokens successfully', async function () {
-    await burnVault
-      .connect(admin)
-      .updateAcceptedTokens(await mockERC20Token.getAddress());
+    await burnVault.connect(admin).updateAcceptedTokens(await mockERC20Token.getAddress());
 
     await mockERC20Token.mint(await user.getAddress(), 1000);
     await mockERC20Token.connect(user).approve(await burnVault.getAddress(), 1000);
@@ -198,9 +179,7 @@ describe('BurnVault', function () {
 
     await mockERC20Token.mint(user.getAddress(), 1000);
     await expect(
-      burnVault
-        .connect(user)
-        .depositTokens(user.getAddress(), 500, mockERC20Token.getAddress()),
+      burnVault.connect(user).depositTokens(user.getAddress(), 500, mockERC20Token.getAddress()),
     ).to.be.reverted;
   });
 
@@ -209,18 +188,14 @@ describe('BurnVault', function () {
 
     await mockERC20Token.connect(user).approve(burnVault.getAddress(), 1000);
     await expect(
-      burnVault
-        .connect(user)
-        .depositTokens(user.getAddress(), 0, mockERC20Token.getAddress()),
+      burnVault.connect(user).depositTokens(user.getAddress(), 0, mockERC20Token.getAddress()),
     ).to.be.revertedWith('BurnVault: amount must be greater than zero');
   });
 
   // 6. Burn Functionality Tests
 
   it('should burn tokens successfully after delay', async function () {
-    await burnVault
-      .connect(admin)
-      .updateAcceptedTokens(await mockERC20Token.getAddress());
+    await burnVault.connect(admin).updateAcceptedTokens(await mockERC20Token.getAddress());
 
     await mockERC20Token.mint(await user.getAddress(), 1000);
     await mockERC20Token.connect(user).approve(await burnVault.getAddress(), 1000);
@@ -236,9 +211,7 @@ describe('BurnVault', function () {
     await ethers.provider.send('evm_mine');
 
     await expect(
-      burnVault
-        .connect(admin)
-        .burnAllTokens(user.getAddress(), mockERC20Token.getAddress()),
+      burnVault.connect(admin).burnAllTokens(user.getAddress(), mockERC20Token.getAddress()),
     )
       .to.emit(burnVault, 'TokensBurned')
       .withArgs(user.getAddress(), 500);
@@ -259,9 +232,7 @@ describe('BurnVault', function () {
       .depositTokens(user.getAddress(), 500, mockERC20Token.getAddress());
 
     await expect(
-      burnVault
-        .connect(admin)
-        .burnAllTokens(user.getAddress(), mockERC20Token.getAddress()),
+      burnVault.connect(admin).burnAllTokens(user.getAddress(), mockERC20Token.getAddress()),
     ).to.be.revertedWithCustomError(burnVault, 'TooEarlyToBurn');
   });
 

@@ -17,7 +17,6 @@ describe('TradingVault Upgrade Tests', function () {
   let deployer: Signer;
   let superAdmin: Signer;
   let admin: Signer;
-  let user: Signer;
   let sales: Signer;
   let nonAdmin: Signer;
 
@@ -208,7 +207,6 @@ describe('TradingVault Upgrade Tests', function () {
       const vaultBalanceBefore = await usdc.balanceOf(await tradingVault.getAddress());
       const recipientBalanceBefore = await usdc.balanceOf(safeWallet);
 
-      const request = await tradingVault.withdrawalRequests(requestId);
       const tx = await tradingVault.connect(admin).executeWithdrawal(requestId);
       const receipt = await tx.wait();
       if (!receipt) {

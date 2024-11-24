@@ -75,8 +75,7 @@ describe('GoldPackToken', function () {
     const ADMIN_ROLE = await gpt.ADMIN_ROLE();
     const SALES_ROLE = await gpt.SALES_ROLE();
 
-    expect(await gpt.hasRole(DEFAULT_ADMIN_ROLE, await superAdmin.getAddress())).to.be
-      .true;
+    expect(await gpt.hasRole(DEFAULT_ADMIN_ROLE, await superAdmin.getAddress())).to.be.true;
     expect(await gpt.hasRole(ADMIN_ROLE, await admin.getAddress())).to.be.true;
     expect(await gpt.hasRole(SALES_ROLE, await sales.getAddress())).to.be.true;
 
@@ -145,9 +144,7 @@ describe('GoldPackToken', function () {
 
   it('Should fail when a non-sales role tries to mint', async function () {
     // Attempt to mint
-    await expect(
-      gpt.connect(user).mint(user.getAddress(), await gpt.TOKENS_PER_TROY_OUNCE()),
-    )
+    await expect(gpt.connect(user).mint(user.getAddress(), await gpt.TOKENS_PER_TROY_OUNCE()))
       .to.be.revertedWithCustomError(gpt, 'SalesRoleNotGranted')
       .withArgs(user.getAddress());
   });
