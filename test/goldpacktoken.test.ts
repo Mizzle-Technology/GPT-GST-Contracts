@@ -32,7 +32,7 @@ describe('GoldPackToken', function () {
     const BurnVault_factory = await ethers.getContractFactory('BurnVault', superAdmin);
     burnVault = (await upgrades.deployProxy(
       BurnVault_factory,
-      [superAdmin.getAddress(), admin.getAddress()],
+      [await superAdmin.getAddress(), await admin.getAddress()],
       { initializer: 'initialize', kind: 'uups' },
     )) as unknown as BurnVault;
     await burnVault.waitForDeployment();
@@ -44,7 +44,7 @@ describe('GoldPackToken', function () {
 
     gpt = (await upgrades.deployProxy(
       gpt_factory,
-      [superAdmin.getAddress(), admin.getAddress(), sales.getAddress()],
+      [await superAdmin.getAddress(), await admin.getAddress(), await sales.getAddress()],
       { initializer: 'initialize', kind: 'uups' },
     )) as unknown as GoldPackToken;
     await gpt.waitForDeployment();
@@ -75,9 +75,10 @@ describe('GoldPackToken', function () {
     const ADMIN_ROLE = await gpt.ADMIN_ROLE();
     const SALES_ROLE = await gpt.SALES_ROLE();
 
-    expect(await gpt.hasRole(DEFAULT_ADMIN_ROLE, superAdmin.getAddress())).to.be.true;
-    expect(await gpt.hasRole(ADMIN_ROLE, admin.getAddress())).to.be.true;
-    expect(await gpt.hasRole(SALES_ROLE, sales.getAddress())).to.be.true;
+    expect(await gpt.hasRole(DEFAULT_ADMIN_ROLE, await superAdmin.getAddress())).to.be
+      .true;
+    expect(await gpt.hasRole(ADMIN_ROLE, await admin.getAddress())).to.be.true;
+    expect(await gpt.hasRole(SALES_ROLE, await sales.getAddress())).to.be.true;
 
     // Verify token properties
     expect(await gpt.decimals()).to.equal(6);

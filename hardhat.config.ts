@@ -2,6 +2,8 @@ import type { HardhatUserConfig } from 'hardhat/config';
 import '@nomicfoundation/hardhat-ethers';
 import '@nomicfoundation/hardhat-toolbox';
 import '@openzeppelin/hardhat-upgrades';
+import '@typechain/hardhat';
+import '@typechain/ethers-v6';
 
 const config: HardhatUserConfig = {
   solidity: {
@@ -25,4 +27,5 @@ const config: HardhatUserConfig = {
     },
   },
 };
+
 export default config;

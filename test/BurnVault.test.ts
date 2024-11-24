@@ -180,15 +180,16 @@ describe('BurnVault', function () {
       .updateAcceptedTokens(await mockERC20Token.getAddress());
 
     await mockERC20Token.mint(await user.getAddress(), 1000);
+    await mockERC20Token.connect(user).approve(await burnVault.getAddress(), 1000);
     await expect(
       burnVault
         .connect(user)
-        .depositTokens(await user.getAddress(), 500, mockERC20Token.getAddress()),
+        .depositTokens(await user.getAddress(), 500, await mockERC20Token.getAddress()),
     )
       .to.emit(burnVault, 'TokensDeposited')
       .withArgs(await user.getAddress(), 500);
 
-    const deposit = await burnVault.deposits(user.getAddress());
+    const deposit = await burnVault.deposits(await user.getAddress());
     expect(deposit.amount).to.equal(500);
   });
 

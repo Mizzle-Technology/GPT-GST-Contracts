@@ -8,6 +8,7 @@ import '@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol';
 import '@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol';
 import '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
 import './ITradingVault.sol';
+import '../../utils/Errors.sol';
 
 contract TradingVault is
   Initializable,
@@ -59,6 +60,21 @@ contract TradingVault is
     WITHDRAWAL_THRESHOLD = 100000 * 10 ** 6; // 100k USDC
   }
 
+  // === modifier ===
+  modifier onlyDefaultAdmin() {
+    if (!hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) {
+      revert Errors.DefaultAdminRoleNotGranted(msg.sender);
+    }
+    _;
+  }
+
+  modifier onlyAdmin() {
+    if (!hasRole(ADMIN_ROLE, msg.sender)) {
+      revert Errors.AdminRoleNotGranted(msg.sender);
+    }
+    _;
+  }
+
   // === Queued Withdrawal Functions ===
   /**
    * @notice Queues a withdrawal request for a specified token and amount.
@@ -73,12 +89,24 @@ contract TradingVault is
   function queueWithdrawal(
     address token,
     uint256 amount
-  ) external onlyRole(ADMIN_ROLE) whenNotPaused nonReentrant {
-    require(amount > 0, 'Amount must be greater than 0');
-    require(token != address(0), 'Invalid token address');
-    require(IERC20(token).balanceOf(address(this)) >= amount, 'Insufficient balance');
+  ) external onlyAdmin whenNotPaused nonReentrant {
     bytes32 requestId = keccak256(abi.encodePacked(token, amount, block.timestamp));
-    require(withdrawalRequests[requestId].amount == 0, 'Duplicate request');
+
+    if (withdrawalRequests[requestId].amount > 0) {
+      revert Errors.DuplicatedWithdrawalRequest(requestId);
+    }
+
+    if (amount <= 0) {
+      revert Errors.InvalidAmount(amount);
+    }
+
+    if (token == address(0)) {
+      revert Errors.AddressCannotBeZero();
+    }
+
+    if (IERC20(token).balanceOf(address(this)) < amount) {
+      revert Errors.InsufficientBalance(IERC20(token).balanceOf(address(this)), amount);
+    }
 
     withdrawalRequests[requestId] = WithdrawalRequest({
       amount: amount,
@@ -115,19 +143,29 @@ contract TradingVault is
    */
   function executeWithdrawal(
     bytes32 requestId
-  ) external onlyRole(ADMIN_ROLE) whenNotPaused nonReentrant {
+  ) external onlyAdmin whenNotPaused nonReentrant {
     WithdrawalRequest storage request = withdrawalRequests[requestId];
-    require(request.amount > 0, 'Invalid request ID');
-    require(!request.executed, 'Already executed');
-    require(!request.cancelled, 'Request cancelled');
-    require(
-      block.timestamp >= request.requestTime + WITHDRAWAL_DELAY,
-      'Withdrawal delay not met'
-    );
-    require(
-      ERC20Upgradeable(request.token).balanceOf(address(this)) >= request.amount,
-      'Insufficient balance'
-    );
+    // if request id does not exist, it will revert
+    if (request.amount == 0) {
+      revert Errors.WithdrawalRequestNotFound(requestId);
+    }
+
+    if (request.executed) {
+      revert Errors.WithdrawalRequestExecuted(requestId);
+    }
+
+    if (request.cancelled) {
+      revert Errors.WithdrawalRequestAlreadyCancelled(requestId);
+    }
+
+    uint256 contractBalance = ERC20Upgradeable(request.token).balanceOf(address(this));
+    if (contractBalance <= request.amount) {
+      revert Errors.InsufficientBalance(contractBalance, request.amount);
+    }
+
+    if (block.timestamp < request.requestTime + WITHDRAWAL_DELAY) {
+      revert Errors.WithdrawalDelayNotMet(requestId);
+    }
 
     ERC20Upgradeable(request.token).safeTransfer(request.transfer_to, request.amount);
     request.executed = true;
@@ -156,12 +194,23 @@ contract TradingVault is
    */
   function cancelWithdrawal(
     bytes32 requestId
-  ) external onlyRole(ADMIN_ROLE) whenNotPaused nonReentrant {
+  ) external onlyAdmin whenNotPaused nonReentrant {
     WithdrawalRequest storage request = withdrawalRequests[requestId];
-    require(request.amount > 0, 'Invalid request ID');
-    require(!request.executed, 'Already executed');
-    require(!request.cancelled, 'Already cancelled');
-    require(block.timestamp < request.expiry, 'Request expired');
+    if (request.amount == 0) {
+      revert Errors.WithdrawalRequestNotFound(requestId);
+    }
+
+    if (request.executed) {
+      revert Errors.WithdrawalRequestExecuted(requestId);
+    }
+
+    if (request.cancelled) {
+      revert Errors.WithdrawalRequestAlreadyCancelled(requestId);
+    }
+
+    if (block.timestamp < request.requestTime + WITHDRAWAL_DELAY) {
+      revert Errors.WithdrawalDelayNotMet(requestId);
+    }
 
     request.cancelled = true;
 
@@ -187,14 +236,26 @@ contract TradingVault is
   function withdraw(
     address token,
     uint256 amount
-  ) external onlyRole(ADMIN_ROLE) whenNotPaused nonReentrant {
-    require(amount > 0, 'Amount must be greater than 0');
-    require(token != address(0), 'Invalid token address');
+  ) external onlyAdmin whenNotPaused nonReentrant {
     require(safeWallet != address(0), 'Invalid withdrawal wallet address');
     require(amount <= WITHDRAWAL_THRESHOLD, 'Amount exceeds threshold');
 
-    uint256 balance = ERC20Upgradeable(token).balanceOf(address(this));
-    require(balance >= amount, 'Insufficient balance');
+    if (amount <= 0) {
+      revert Errors.InvalidAmount(amount);
+    }
+
+    if (token == address(0)) {
+      revert Errors.AddressCannotBeZero();
+    }
+
+    uint256 contractBalance = ERC20Upgradeable(token).balanceOf(address(this));
+    if (contractBalance <= amount) {
+      revert Errors.InsufficientBalance(contractBalance, amount);
+    }
+
+    if (safeWallet == address(0)) {
+      revert Errors.SafeWalletNotSet();
+    }
 
     ERC20Upgradeable(token).safeTransfer(safeWallet, amount);
 
@@ -210,7 +271,7 @@ contract TradingVault is
    */
   function setWithdrawalWallet(
     address _safeWallet
-  ) external onlyRole(DEFAULT_ADMIN_ROLE) returns (bool) {
+  ) external onlyDefaultAdmin returns (bool) {
     require(_safeWallet != address(0), 'Invalid wallet address');
     require(safeWallet != _safeWallet, 'Same wallet address');
     safeWallet = _safeWallet;
@@ -226,7 +287,7 @@ contract TradingVault is
    */
   function setWithdrawalThreshold(
     uint256 _threshold
-  ) external onlyRole(DEFAULT_ADMIN_ROLE) returns (bool) {
+  ) external onlyDefaultAdmin returns (bool) {
     require(_threshold > 0, 'Threshold must be greater than 0');
     require(WITHDRAWAL_THRESHOLD != _threshold, 'Same threshold');
 
@@ -237,16 +298,16 @@ contract TradingVault is
   }
 
   // == Pausable functions ==
-  function pause() external onlyRole(ADMIN_ROLE) {
+  function pause() external onlyAdmin {
     _pause();
   }
 
-  function unpause() external onlyRole(ADMIN_ROLE) {
+  function unpause() external onlyAdmin {
     _unpause();
   }
 
   // === UUPS Upgrade ===
   function _authorizeUpgrade(
     address newImplementation
-  ) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
+  ) internal override onlyDefaultAdmin {}
 }

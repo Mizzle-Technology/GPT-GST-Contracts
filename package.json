@@ -1,7 +1,6 @@
 {
   "name": "gpt-gst-contracts",
   "version": "1.0.0",
-  "type": "module",
   "description": "A set of smart contracts for managing the sale, minting, and burning of Gold Pack Tokens (GPT), including secure vaults and price calculation integration. This project leverages the Foundry framework for testing and deployment.",
   "main": "index.js",
   "directories": {
@@ -13,7 +12,8 @@
     "lint:fix": "eslint '**/*.{js,ts}' --fix",
     "format": "prettier --write '**/*.{js,ts,sol,json,md}'",
     "format:check": "prettier --check '**/*.{js,ts,sol,json,md}'",
-    "test": "npx hardhat test"
+    "test": "npx hardhat test",
+    "compile": "npx hardhat compile"
   },
   "keywords": [],
   "author": "",
