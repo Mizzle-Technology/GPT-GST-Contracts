@@ -11,7 +11,9 @@ all: compile deploy test typechain
 # Compile contracts
 compile:
 	@echo "Compiling contracts..."
-	$(HARDHAT) clean && $(HARDHAT) compile && npm run format'
+	$(HARDHAT) clean && $(HARDHAT) compile
+	npm run format
+	npm run lint:fix
 
 # Deploy contracts
 deploy: compile

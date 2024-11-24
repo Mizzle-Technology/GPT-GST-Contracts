@@ -228,7 +228,6 @@ contract TradingVault is
    * emit ImmediateWithdrawal Emitted when a withdrawal request is successfully executed.
    */
   function withdraw(address token, uint256 amount) external onlyAdmin whenNotPaused nonReentrant {
-
     if (amount > WITHDRAWAL_THRESHOLD) {
       revert Errors.AmountExceedsThreshold(amount, WITHDRAWAL_THRESHOLD);
     }

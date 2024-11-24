@@ -18,6 +18,7 @@ import '../tokens/GoldPackToken.sol';
 import '../libs/SalesLib.sol';
 import '../vaults/TradingVault.sol';
 import './ISalesContract.sol';
+import {Errors} from '../../utils/Errors.sol';
 
 /**
  * @title SalesContract
@@ -49,27 +50,23 @@ contract SalesContract is
   bytes32 public constant SALES_ROLE = keccak256('SALES_ROLE');
   bytes32 private constant DOMAIN_TYPE_HASH =
     keccak256('EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)');
-  bytes32 public constant USER_ORDER_TYPEHASH =
+  bytes32 public constant ORDER_TYPEHASH =
     keccak256(
-      'Order(uint256 roundId,address buyer,uint256 gptAmount,uint256 nonce,uint256 expiry,address paymentToken,uint256 chainId)'
+      'Order(uint256 roundId,address buyer,uint256 gptAmount,uint256 nonce,uint256 expiry,address paymentToken)'
     );
-  bytes32 public constant RELAYER_ORDER_TYPEHASH =
-    keccak256(
-      'RelayerOrder(uint256 roundId,address buyer,uint256 gptAmount,uint256 nonce,uint256 expiry,address paymentToken,bytes userSignature,uint256 chainId)'
-    );
+  // bytes32 public constant RELAYER_ORDER_TYPEHASH =
+  //   keccak256(
+  //     'RelayerOrder(uint256 roundId,address buyer,uint256 gptAmount,uint256 nonce,uint256 expiry,address paymentToken,bytes userSignature)'
+  //   );
   bytes32 public DOMAIN_SEPARATOR;
 
   // === State Variables ===
-  uint256 public maxPurchaseAmount;
-  uint256 public totalTokensSold;
   uint256 public currentRoundId;
   uint256 public nextRoundId;
-  uint256 private chainId;
-  string public pauseReason;
   address public trustedSigner;
   GoldPackToken public gptToken;
   TradingVault public tradingVault;
-  AggregatorV3Interface internal goldPriceFeed;
+  AggregatorV3Interface public goldPriceFeed;
   SaleStage public currentStage;
 
   mapping(address => TokenConfig) public acceptedTokens;
@@ -119,14 +116,12 @@ contract SalesContract is
     DOMAIN_SEPARATOR = keccak256(
       abi.encode(
         DOMAIN_TYPE_HASH,
-        keccak256(bytes('GPTSales')),
+        keccak256(bytes('GoldPack Token Sales')),
         keccak256(bytes('1')),
         block.chainid,
         address(this)
       )
     );
-
-    chainId = block.chainid;
   }
 
   // === Token Management ===
@@ -234,55 +229,41 @@ contract SalesContract is
     require(tokenConfig.isAccepted, 'Token not accepted');
 
     // Compute user order hash
-    bytes32 userOrderHash = keccak256(
+    bytes32 orderHash = keccak256(
       abi.encode(
-        USER_ORDER_TYPEHASH,
+        ORDER_TYPEHASH,
         order.roundId,
         order.buyer,
         order.gptAmount,
         order.nonce,
         order.expiry,
-        order.paymentToken,
-        chainId
+        order.paymentToken
       )
     );
 
     // Verify user signature using SalesLib
-    require(
-      SalesLib.verifyUserSignature(
-        DOMAIN_SEPARATOR,
-        userOrderHash,
-        order.buyer,
-        order.userSignature
-      ),
-      'Invalid user signature'
+    bool isUserSignatureValid = SalesLib.verifySignature(
+      DOMAIN_SEPARATOR,
+      orderHash,
+      order.buyer,
+      order.userSignature
     );
 
-    // Compute relayer order hash
-    bytes32 relayerOrderHash = keccak256(
-      abi.encode(
-        RELAYER_ORDER_TYPEHASH,
-        order.roundId,
-        order.buyer,
-        order.gptAmount,
-        order.nonce,
-        order.expiry,
-        order.paymentToken,
-        order.userSignature,
-        chainId
-      )
-    );
+    if (!isUserSignatureValid) {
+      revert Errors.InvalidUserSignature(order.userSignature);
+    }
 
     // Verify relayer signature using SalesLib
-    require(
-      SalesLib.verifyRelayerSignature(
-        DOMAIN_SEPARATOR,
-        relayerOrderHash,
-        trustedSigner,
-        order.relayerSignature
-      ),
-      'Invalid relayer signature'
+    bool isRelayerSignatureValid = SalesLib.verifySignature(
+      DOMAIN_SEPARATOR,
+      orderHash,
+      trustedSigner,
+      order.relayerSignature
     );
+
+    if (!isRelayerSignatureValid) {
+      revert Errors.InvalidRelayerSignature(order.relayerSignature);
+    }
 
     // Fetch the current round
     ISalesContract.Round storage currentRound = rounds[order.roundId];
@@ -317,55 +298,41 @@ contract SalesContract is
     require(tokenConfig.isAccepted, 'Token not accepted');
 
     // Compute user order hash
-    bytes32 userOrderHash = keccak256(
+    bytes32 orderHash = keccak256(
       abi.encode(
-        USER_ORDER_TYPEHASH,
+        ORDER_TYPEHASH,
         order.roundId,
         order.buyer,
         order.gptAmount,
         order.nonce,
         order.expiry,
-        order.paymentToken,
-        chainId
+        order.paymentToken
       )
     );
 
     // Verify user signature using SalesLib
-    require(
-      SalesLib.verifyUserSignature(
-        DOMAIN_SEPARATOR,
-        userOrderHash,
-        order.buyer,
-        order.userSignature
-      ),
-      'Invalid user signature'
+    bool isUserSignatureValid = SalesLib.verifySignature(
+      DOMAIN_SEPARATOR,
+      orderHash,
+      order.buyer,
+      order.userSignature
     );
 
-    // Compute relayer order hash
-    bytes32 relayerOrderHash = keccak256(
-      abi.encode(
-        RELAYER_ORDER_TYPEHASH,
-        order.roundId,
-        order.buyer,
-        order.gptAmount,
-        order.nonce,
-        order.expiry,
-        order.paymentToken,
-        order.userSignature,
-        chainId
-      )
-    );
+    if (!isUserSignatureValid) {
+      revert Errors.InvalidUserSignature(order.userSignature);
+    }
 
     // Verify relayer signature using SalesLib
-    require(
-      SalesLib.verifyRelayerSignature(
-        DOMAIN_SEPARATOR,
-        relayerOrderHash,
-        trustedSigner,
-        order.relayerSignature
-      ),
-      'Invalid relayer signature'
+    bool isRelayerSignatureValid = SalesLib.verifySignature(
+      DOMAIN_SEPARATOR,
+      orderHash,
+      trustedSigner,
+      order.relayerSignature
     );
+
+    if (!isRelayerSignatureValid) {
+      revert Errors.InvalidRelayerSignature(order.relayerSignature);
+    }
 
     // Fetch the current round
     ISalesContract.Round storage currentRound = rounds[order.roundId];

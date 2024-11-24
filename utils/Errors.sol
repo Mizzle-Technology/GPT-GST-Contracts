@@ -25,4 +25,8 @@ library Errors {
   error WithdrawalThresholdNotMet(uint256 amount, uint256 threshold);
   error SafeWalletNotSet();
   error AmountExceedsThreshold(uint256 amount, uint256 threshold);
+
+  // SalesContract errors
+  error InvalidUserSignature(bytes signature);
+  error InvalidRelayerSignature(bytes signature);
 }

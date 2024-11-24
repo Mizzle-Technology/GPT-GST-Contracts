@@ -15,7 +15,7 @@ library SalesLib {
   using CalculationLib for *;
 
   // === Signature Verification ===
-  function verifyUserSignature(
+  function verifySignature(
     bytes32 domainSeparator,
     bytes32 userOrderHash,
     address buyer,
@@ -23,16 +23,6 @@ library SalesLib {
   ) internal view returns (bool) {
     bytes32 digest = keccak256(abi.encodePacked('\x19\x01', domainSeparator, userOrderHash));
     return SignatureChecker.isValidSignatureNow(buyer, digest, signature);
-  }
-
-  function verifyRelayerSignature(
-    bytes32 domainSeparator,
-    bytes32 relayerOrderHash,
-    address trustedSigner,
-    bytes memory relayerSignature
-  ) internal view returns (bool) {
-    bytes32 digest = keccak256(abi.encodePacked('\x19\x01', domainSeparator, relayerOrderHash));
-    return SignatureChecker.isValidSignatureNow(trustedSigner, digest, relayerSignature);
   }
 
   // === Purchase Processing ===
