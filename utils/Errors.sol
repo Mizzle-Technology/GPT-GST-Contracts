@@ -24,4 +24,5 @@ library Errors {
   error WithdrawalDelayNotMet(bytes32 requestId);
   error WithdrawalThresholdNotMet(uint256 amount, uint256 threshold);
   error SafeWalletNotSet();
+  error AmountExceedsThreshold(uint256 amount, uint256 threshold);
 }

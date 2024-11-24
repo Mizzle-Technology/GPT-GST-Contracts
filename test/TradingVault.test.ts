@@ -36,7 +36,7 @@ describe('TradingVault Upgrade Tests', function () {
 
   beforeEach(async function () {
     // Get the signers
-    [deployer, superAdmin, admin, user, nonAdmin, sales, safeWallet, newSafeWallet] =
+    [deployer, superAdmin, admin, nonAdmin, sales, safeWallet, newSafeWallet] =
       await ethers.getSigners();
 
     // Deploy Mock Contracts
@@ -278,6 +278,88 @@ describe('TradingVault Upgrade Tests', function () {
       await expect(
         tradingVault.connect(admin).executeWithdrawal(requestId),
       ).to.be.revertedWithCustomError(tradingVault, 'WithdrawalAlreadyCancelled');
+    });
+  });
+
+  describe('withdraw', function () {
+    beforeEach(async function () {
+      // Setup USDC balance in vault
+      await usdc.mint(await tradingVault.getAddress(), ethers.parseUnits('100000', 6));
+    });
+
+    it('should withdraw tokens successfully within threshold', async function () {
+      const amount = ethers.parseUnits('50000', 6); // 50k USDC (below 100k threshold)
+      const safeWalletAddress = await tradingVault.safeWallet();
+
+      const vaultBalanceBefore = await usdc.balanceOf(await tradingVault.getAddress());
+      const safeWalletBalanceBefore = await usdc.balanceOf(safeWalletAddress);
+
+      const tx = await tradingVault.connect(admin).withdraw(await usdc.getAddress(), amount);
+
+      // Check event emission
+      await expect(tx)
+        .to.emit(tradingVault, 'ImmediateWithdrawal')
+        .withArgs(await usdc.getAddress(), amount, safeWalletAddress, await time.latest());
+
+      // Check balances
+      expect(await usdc.balanceOf(await tradingVault.getAddress())).to.equal(
+        vaultBalanceBefore - amount,
+      );
+      expect(await usdc.balanceOf(safeWalletAddress)).to.equal(safeWalletBalanceBefore + amount);
+    });
+
+    it('should revert if amount exceeds threshold', async function () {
+      const amount = ethers.parseUnits('150000', 6); // 150k USDC (above 100k threshold)
+      const threshold = await tradingVault.WITHDRAWAL_THRESHOLD();
+
+      await expect(tradingVault.connect(admin).withdraw(await usdc.getAddress(), amount))
+        .to.be.revertedWithCustomError(tradingVault, 'AmountExceedsThreshold')
+        .withArgs(amount, threshold);
+    });
+
+    it('should revert if caller is not admin', async function () {
+      const amount = ethers.parseUnits('50000', 6);
+
+      await expect(tradingVault.connect(nonAdmin).withdraw(await usdc.getAddress(), amount))
+        .to.be.revertedWithCustomError(tradingVault, 'AdminRoleNotGranted')
+        .withArgs(await nonAdmin.getAddress());
+    });
+
+    it('should revert if amount is zero', async function () {
+      await expect(tradingVault.connect(admin).withdraw(await usdc.getAddress(), 0))
+        .to.be.revertedWithCustomError(tradingVault, 'InvalidAmount')
+        .withArgs(0);
+    });
+
+    it('should revert if token address is zero', async function () {
+      const amount = ethers.parseUnits('50000', 6);
+
+      await expect(
+        tradingVault.connect(admin).withdraw(ethers.ZeroAddress, amount),
+      ).to.be.revertedWithCustomError(tradingVault, 'AddressCannotBeZero');
+    });
+
+    it('should revert if vault has insufficient balance', async function () {
+      const amount = ethers.parseUnits('70000', 6); // More than vault balance
+      const contractBalance = await usdc.balanceOf(await tradingVault.getAddress());
+      // withdraw first time
+      await tradingVault.connect(admin).withdraw(await usdc.getAddress(), amount);
+
+      // withdraw second time
+      await expect(tradingVault.connect(admin).withdraw(await usdc.getAddress(), amount))
+        .to.be.revertedWithCustomError(tradingVault, 'InsufficientBalance')
+        .withArgs(contractBalance - amount, amount);
+    });
+
+    it('should revert when contract is paused', async function () {
+      const amount = ethers.parseUnits('50000', 6);
+
+      // Pause the contract
+      await tradingVault.connect(admin).pause();
+
+      await expect(
+        tradingVault.connect(admin).withdraw(await usdc.getAddress(), amount),
+      ).to.be.revertedWithCustomError(tradingVault, 'EnforcedPause');
     });
   });
 

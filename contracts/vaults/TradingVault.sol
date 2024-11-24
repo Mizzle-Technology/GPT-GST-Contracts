@@ -228,8 +228,10 @@ contract TradingVault is
    * emit ImmediateWithdrawal Emitted when a withdrawal request is successfully executed.
    */
   function withdraw(address token, uint256 amount) external onlyAdmin whenNotPaused nonReentrant {
-    require(safeWallet != address(0), 'Invalid withdrawal wallet address');
-    require(amount <= WITHDRAWAL_THRESHOLD, 'Amount exceeds threshold');
+
+    if (amount > WITHDRAWAL_THRESHOLD) {
+      revert Errors.AmountExceedsThreshold(amount, WITHDRAWAL_THRESHOLD);
+    }
 
     if (amount <= 0) {
       revert Errors.InvalidAmount(amount);
