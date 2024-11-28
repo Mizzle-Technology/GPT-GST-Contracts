@@ -8,7 +8,6 @@ describe('RewardDistribution Tests', function () {
   // Constants
   const DEFAULT_ADMIN_ROLE = ethers.ZeroHash;
   const ADMIN_ROLE = ethers.keccak256(ethers.toUtf8Bytes('ADMIN_ROLE'));
-  const SCALE = ethers.parseUnits('1', 18);
 
   // Contract instances
   let rewardToken1: MockERC20;
@@ -20,14 +19,13 @@ describe('RewardDistribution Tests', function () {
   let admin: SignerWithAddress;
   let nonAdmin: SignerWithAddress;
   let shareholder1: SignerWithAddress;
-  let shareholder2: SignerWithAddress;
-  let anotherAdmin: SignerWithAddress;
-  let newSuperAdmin: SignerWithAddress;
+  // let shareholder2: SignerWithAddress;
+  // let anotherAdmin: SignerWithAddress;
+  // let newSuperAdmin: SignerWithAddress;
 
   beforeEach(async function () {
     // Get signers
-    [superAdmin, admin, shareholder1, shareholder2, anotherAdmin, nonAdmin, newSuperAdmin] =
-      await ethers.getSigners();
+    [superAdmin, admin, shareholder1, nonAdmin] = await ethers.getSigners();
 
     // Deploy mock tokens
     const MockERC20Factory = await ethers.getContractFactory('MockERC20');
@@ -133,10 +131,10 @@ describe('RewardDistribution Tests', function () {
         'RewardDistributionV2',
         superAdmin,
       );
-      const upgraded = await upgrades.upgradeProxy(
+      const upgraded = (await upgrades.upgradeProxy(
         await rewardDistribution.getAddress(),
-        RewardDistributionV2Factory,
-      );
+        RewardDistributionV2Factory.connect(superAdmin),
+      )) as unknown as RewardDistributionV2;
 
       // Test new V2 functionality
       await upgraded.setNewVariable(12345);
@@ -309,9 +307,7 @@ describe('RewardDistribution Tests', function () {
         .to.emit(rewardDistribution, 'RewardsUnlocked')
         .withArgs(shareholder1.address);
 
-      const [shares, isLocked, isActivated] = await rewardDistribution.getShareholders(
-        shareholder1.address,
-      );
+      const [shares, isLocked] = await rewardDistribution.getShareholders(shareholder1.address);
       expect(shares).to.equal(ethers.parseUnits('0.5', 18));
       expect(isLocked).to.be.false;
     });
