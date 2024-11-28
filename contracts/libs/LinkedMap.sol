@@ -16,6 +16,7 @@ library LinkedMap {
     mapping(bytes32 => Node) nodes;
     bytes32 head;
     bytes32 tail;
+    uint256 size;
   }
 
   /**
@@ -37,6 +38,7 @@ library LinkedMap {
     }
 
     self.tail = key;
+    self.size++;
   }
 
   /**
@@ -62,6 +64,7 @@ library LinkedMap {
     }
 
     delete self.nodes[key];
+    self.size--;
   }
 
   /**
@@ -110,5 +113,9 @@ library LinkedMap {
    */
   function getTail(LinkedList storage self) internal view returns (bytes32) {
     return self.tail;
+  }
+
+  function length(LinkedList storage self) internal view returns (uint256) {
+    return self.size;
   }
 }

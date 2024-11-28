@@ -81,7 +81,7 @@ library CalculationLib {
    *   }
    * }
    */
-  function calculateGptTokenAmount(
+  function calculateGptAmount(
     int256 goldPrice,
     int256 tokenPrice,
     uint256 paymentTokenAmount,

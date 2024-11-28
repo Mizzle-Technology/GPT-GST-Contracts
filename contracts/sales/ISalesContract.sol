@@ -17,10 +17,11 @@ interface ISalesContract {
     bool isActive;
     uint256 startTime;
     uint256 endTime;
+    SaleStage stage;
   }
 
   struct Order {
-    uint256 roundId;
+    bytes32 roundId;
     address buyer;
     uint256 gptAmount;
     uint256 nonce;
@@ -46,13 +47,13 @@ interface ISalesContract {
     bool isPresale
   );
   event RoundCreated(
-    uint256 indexed roundId,
+    bytes32 indexed roundId,
     uint256 maxTokens,
     uint256 startTime,
     uint256 endTime
   );
-  event RoundActivated(uint256 indexed roundId);
-  event RoundDeactivated(uint256 indexed roundId);
+  event RoundActivated(bytes32 indexed roundId);
+  event RoundDeactivated(bytes32 indexed roundId);
   event TrustedSignerUpdated(address indexed oldSigner, address indexed newSigner);
   event PriceAgeUpdated(uint256 oldAge, uint256 newAge);
   event Paused(address indexed pauser, uint256 timestamp);
@@ -61,22 +62,22 @@ interface ISalesContract {
   event ETHRecovered(uint256 amount, address indexed recipient);
   event AddressWhitelisted(address indexed addr);
   event AddressRemoved(address indexed addr);
+  event RoundStageSet(bytes32 indexed roundId, SaleStage stage);
 
   // === Token Management ===
   function addAcceptedToken(address token, address priceFeed, uint8 decimals) external;
   function removeAcceptedToken(address token) external;
 
-  // === Round Management ===
-  function createRound(uint256 maxTokens, uint256 startTime, uint256 endTime) external;
-  function activateRound(uint256 roundId) external;
-  function deactivateRound(uint256 roundId) external;
-
   // === Sale Stage Management ===
-  function setSaleStage(SaleStage _stage) external;
+  function createRound(uint256 maxTokens, uint256 startTime, uint256 endTime) external;
+  function setSaleStage(SaleStage _stage, bytes32 roundId) external;
 
   // === Purchase Functions ===
   function preSalePurchase(Order calldata order) external;
   function authorizePurchase(Order calldata order) external;
+
+  // === View Functions ===
+  function RoundStage(bytes32 roundId) external view returns (SaleStage);
 
   // === Emergency Functions ===
   function pause() external;

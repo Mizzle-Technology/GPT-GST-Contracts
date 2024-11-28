@@ -5,7 +5,7 @@ import '@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol';
 import '@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20BurnableUpgradeable.sol';
 import '../vaults/TradingVault.sol';
 import '../vaults/BurnVault.sol';
-
+import '../libs/CalculationLib.sol';
 // Mock contracts
 contract MockERC20 is ERC20BurnableUpgradeable {
   uint8 private _decimals;
@@ -167,5 +167,42 @@ contract MaliciousContract is IReentrancyAttack {
   function attackBurn(address account, uint256 amount) public {
     targetAccount = account;
     vault.burnTokens(account, amount, token);
+  }
+}
+
+contract TestCalculationLib {
+  using CalculationLib for *;
+  function calculateGptAmount(
+    int256 goldPrice,
+    int256 tokenPrice,
+    uint256 paymentTokenAmount,
+    uint8 tokenDecimals,
+    uint256 tokensPerTroyOunce
+  ) public pure returns (uint256 gptAmount) {
+    return
+      CalculationLib.calculateGptAmount(
+        goldPrice,
+        tokenPrice,
+        paymentTokenAmount,
+        tokenDecimals,
+        tokensPerTroyOunce
+      );
+  }
+
+  function calculatePaymentTokenAmount(
+    int256 goldPrice,
+    int256 tokenPrice,
+    uint256 gptAmount,
+    uint8 tokenDecimals,
+    uint256 tokensPerTroyOunce
+  ) public pure returns (uint256 tokenAmount) {
+    return
+      CalculationLib.calculatePaymentTokenAmount(
+        goldPrice,
+        tokenPrice,
+        gptAmount,
+        tokenDecimals,
+        tokensPerTroyOunce
+      );
   }
 }

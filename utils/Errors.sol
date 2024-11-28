@@ -29,4 +29,19 @@ library Errors {
   // SalesContract errors
   error InvalidUserSignature(bytes signature);
   error InvalidRelayerSignature(bytes signature);
+  error InvalidNonce(uint256 nonce);
+  error RoundNotExist();
+  error RoundAlreadyActive();
+  error RoundNotActive();
+  error RoundAlreadyEnded();
+  error RoundNotStarted();
+  error RoundStageInvalid();
+  error NotWhitelisted();
+  error BuyerMismatch();
+  error TokenNotAccepted(address token);
+  error TokenAlreadyAccepted(address token);
+  error SignatureExpired();
+  error OrderAlreadyExpired();
+  error InvalidTimeRange(uint256 startTime, uint256 endTime);
+  error ExceedMaxAllocation(uint256 amount, uint256 maxTokens);
 }
