@@ -519,6 +519,452 @@ describe('SalesContract Tests', function () {
         .withArgs(user.address);
     });
   });
+
+  describe('Pre-Sale Purchase', async () => {
+    let currentRoundId: string;
+    let currentTime: number;
+
+    beforeEach(async () => {
+      currentTime = await time.latest();
+      // Create round
+      const createdRoundTx = await salesContract
+        .connect(sales)
+        .createRound(
+          ethers.parseUnits('100000', GPT_DECIMALS),
+          currentTime,
+          currentTime + 24 * 60 * 60,
+        );
+      const receipt = await createdRoundTx.wait();
+      if (!receipt) {
+        throw new Error('Round creation failed');
+      }
+
+      const roundCreatedEvent = receipt.logs.find(
+        (log) => salesContract.interface.parseLog(log)?.name === 'RoundCreated',
+      );
+
+      if (!roundCreatedEvent) {
+        throw new Error('Round creation event not found');
+      }
+
+      const parseLog = salesContract.interface.parseLog(roundCreatedEvent);
+      currentRoundId = parseLog?.args[0];
+
+      // Mint USDC to user
+      await usdc.mint(user.address, ethers.parseUnits('2000', USDC_DECIMALS));
+      await usdc
+        .connect(user)
+        .approve(await salesContract.getAddress(), ethers.parseUnits('2000', USDC_DECIMALS));
+    });
+
+    it('should process presale purchase successfully for whitelisted user', async function () {
+      // Whitelist user
+      await salesContract.connect(sales).addToWhitelist(user.address);
+
+      // Set to PreSale stage
+      await salesContract.connect(sales).setSaleStage(SaleStage.PreSale, currentRoundId);
+
+      const order = {
+        roundId: currentRoundId,
+        buyer: user.address,
+        gptAmount: ethers.parseUnits('10000', GPT_DECIMALS),
+        nonce: await salesContract.nonces(user.address),
+        expiry: currentTime + 3600,
+        paymentToken: await usdc.getAddress(),
+        userSignature: '0x00',
+        relayerSignature: '0x00',
+      };
+
+      const userSignature = await getUserDigest(salesContract, user, order);
+      order.userSignature = userSignature;
+
+      const relayerSignature = await getUserDigest(salesContract, relayer, order);
+      order.relayerSignature = relayerSignature;
+
+      await salesContract.connect(user).preSalePurchase(order);
+
+      expect(await gptToken.balanceOf(user.address)).to.equal(order.gptAmount);
+      expect(await salesContract.nonces(user.address)).to.equal(1);
+    });
+
+    it('should revert for non-whitelisted user', async function () {
+      await salesContract.connect(sales).setSaleStage(SaleStage.PreSale, currentRoundId);
+
+      const order = {
+        roundId: currentRoundId,
+        buyer: user.address,
+        gptAmount: ethers.parseUnits('10000', GPT_DECIMALS),
+        nonce: 0,
+        expiry: currentTime + 3600,
+        paymentToken: await usdc.getAddress(),
+        userSignature: '0x00',
+        relayerSignature: '0x00',
+      };
+
+      const userSignature = await getUserDigest(salesContract, user, order);
+      const relayerSignature = await getUserDigest(salesContract, relayer, order);
+
+      await expect(
+        salesContract.connect(user).preSalePurchase({
+          ...order,
+          userSignature,
+          relayerSignature,
+        }),
+      ).to.be.revertedWithCustomError(salesContract, 'NotWhitelisted');
+    });
+
+    it('should revert when not in PreSale stage', async function () {
+      await salesContract.connect(sales).addToWhitelist(user.address);
+      // Keep in PreMarketing stage
+
+      const order = {
+        roundId: currentRoundId,
+        buyer: user.address,
+        gptAmount: ethers.parseUnits('10000', GPT_DECIMALS),
+        nonce: 0,
+        expiry: currentTime + 3600,
+        paymentToken: await usdc.getAddress(),
+        userSignature: '0x00',
+        relayerSignature: '0x00',
+      };
+
+      const userSignature = await getUserDigest(salesContract, user, order);
+      const relayerSignature = await getUserDigest(salesContract, relayer, order);
+
+      await expect(
+        salesContract.connect(user).preSalePurchase({
+          ...order,
+          userSignature,
+          relayerSignature,
+        }),
+      ).to.be.revertedWithCustomError(salesContract, 'RoundStageInvalid');
+    });
+
+    it('should revert when buyer address doesnt match sender', async function () {
+      await salesContract.connect(sales).addToWhitelist(user.address);
+      await salesContract.connect(sales).setSaleStage(SaleStage.PreSale, currentRoundId);
+
+      const order = {
+        roundId: currentRoundId,
+        buyer: admin.address, // Different from sender
+        gptAmount: ethers.parseUnits('10000', GPT_DECIMALS),
+        nonce: 0,
+        expiry: currentTime + 3600,
+        paymentToken: await usdc.getAddress(),
+        userSignature: '0x00',
+        relayerSignature: '0x00',
+      };
+
+      const userSignature = await getUserDigest(salesContract, admin, order);
+      const relayerSignature = await getUserDigest(salesContract, relayer, order);
+
+      await expect(
+        salesContract.connect(user).preSalePurchase({
+          ...order,
+          userSignature,
+          relayerSignature,
+        }),
+      ).to.be.revertedWithCustomError(salesContract, 'BuyerMismatch');
+    });
+
+    it('should revert when order is expired', async function () {
+      await salesContract.connect(sales).addToWhitelist(user.address);
+      await salesContract.connect(sales).setSaleStage(SaleStage.PreSale, currentRoundId);
+
+      // Advance time
+      await time.increase(3600); // Advance 1 hour
+      const currentTimeNow = await time.latest();
+
+      const order = {
+        roundId: currentRoundId,
+        buyer: user.address,
+        gptAmount: ethers.parseUnits('10000', GPT_DECIMALS),
+        nonce: 0,
+        expiry: currentTimeNow - 60, // Set expiry to 1 minute ago
+        paymentToken: await usdc.getAddress(),
+        userSignature: '0x00',
+        relayerSignature: '0x00',
+      };
+
+      const userSignature = await getUserDigest(salesContract, user, order);
+      const relayerSignature = await getUserDigest(salesContract, relayer, order);
+
+      await expect(
+        salesContract.connect(user).preSalePurchase({
+          ...order,
+          userSignature,
+          relayerSignature,
+        }),
+      ).to.be.revertedWithCustomError(salesContract, 'OrderAlreadyExpired');
+    });
+
+    it('should revert with invalid signatures', async function () {
+      await salesContract.connect(sales).addToWhitelist(user.address);
+      await salesContract.connect(sales).setSaleStage(SaleStage.PreSale, currentRoundId);
+
+      const order = {
+        roundId: currentRoundId,
+        buyer: user.address,
+        gptAmount: ethers.parseUnits('10000', GPT_DECIMALS),
+        nonce: 0,
+        expiry: currentTime + 3600,
+        paymentToken: await usdc.getAddress(),
+        userSignature: '0x00',
+        relayerSignature: '0x00',
+      };
+
+      // Generate invalid signature by using wrong signer
+      const invalidSignature = await getUserDigest(salesContract, admin, order);
+
+      await expect(
+        salesContract.connect(user).preSalePurchase({
+          ...order,
+          userSignature: invalidSignature,
+          relayerSignature: invalidSignature,
+        }),
+      )
+        .to.be.revertedWithCustomError(salesContract, 'InvalidUserSignature')
+        .withArgs(invalidSignature);
+    });
+
+    it('should revert with insufficient balance', async function () {
+      await salesContract.connect(sales).addToWhitelist(user.address);
+      await salesContract.connect(sales).setSaleStage(SaleStage.PreSale, currentRoundId);
+
+      // Burn all user's USDC
+      const userBalance = await usdc.balanceOf(user.address);
+      await usdc.connect(user).burn(userBalance);
+
+      const order = {
+        roundId: currentRoundId,
+        buyer: user.address,
+        gptAmount: ethers.parseUnits('10000', GPT_DECIMALS),
+        nonce: 0,
+        expiry: currentTime + 3600,
+        paymentToken: await usdc.getAddress(),
+        userSignature: '0x00',
+        relayerSignature: '0x00',
+      };
+
+      const userSignature = await getUserDigest(salesContract, user, order);
+      const relayerSignature = await getUserDigest(salesContract, relayer, order);
+
+      const tokenAmount = await salesContract.queryPaymentTokenAmount(
+        order.gptAmount,
+        await usdc.getAddress(),
+      );
+
+      await expect(
+        salesContract.connect(user).preSalePurchase({
+          ...order,
+          userSignature,
+          relayerSignature,
+        }),
+      )
+        .to.be.revertedWithCustomError(salesContract, 'InsufficientBalance')
+        .withArgs(await usdc.balanceOf(user.address), tokenAmount);
+    });
+
+    it('should revert when exceeding max allocation', async function () {
+      await salesContract.connect(sales).addToWhitelist(user.address);
+      await salesContract.connect(sales).setSaleStage(SaleStage.PreSale, currentRoundId);
+
+      const order = {
+        roundId: currentRoundId,
+        buyer: user.address,
+        gptAmount: ethers.parseUnits('200000', GPT_DECIMALS), // More than round allocation
+        nonce: 0,
+        expiry: currentTime + 3600,
+        paymentToken: await usdc.getAddress(),
+        userSignature: '0x00',
+        relayerSignature: '0x00',
+      };
+
+      const userSignature = await getUserDigest(salesContract, user, order);
+      const relayerSignature = await getUserDigest(salesContract, relayer, order);
+
+      await expect(
+        salesContract.connect(user).preSalePurchase({
+          ...order,
+          userSignature,
+          relayerSignature,
+        }),
+      ).to.be.revertedWithCustomError(salesContract, 'ExceedMaxAllocation');
+    });
+
+    it('should revert when round has not started', async function () {
+      // Create a future round
+      const futureTime = currentTime + 3600; // 1 hour in the future
+      const futureRoundTx = await salesContract
+        .connect(sales)
+        .createRound(
+          ethers.parseUnits('100000', GPT_DECIMALS),
+          futureTime,
+          futureTime + 24 * 60 * 60,
+        );
+      const receipt = await futureRoundTx.wait();
+      if (!receipt) {
+        throw new Error('Future round creation failed');
+      }
+
+      const roundCreatedEvent = receipt.logs.find(
+        (log) => salesContract.interface.parseLog(log)?.name === 'RoundCreated',
+      );
+      if (!roundCreatedEvent) {
+        throw new Error('Round creation event not found');
+      }
+
+      const futureRoundId = salesContract.interface.parseLog(roundCreatedEvent)?.args[0];
+
+      await salesContract.connect(sales).addToWhitelist(user.address);
+      await expect(
+        salesContract.connect(sales).setSaleStage(SaleStage.PreSale, futureRoundId),
+      ).to.be.revertedWithCustomError(salesContract, 'RoundNotStarted');
+
+      const order = {
+        roundId: futureRoundId,
+        buyer: user.address,
+        gptAmount: ethers.parseUnits('10000', GPT_DECIMALS),
+        nonce: 0,
+        expiry: currentTime + 7200,
+        paymentToken: await usdc.getAddress(),
+        userSignature: '0x00',
+        relayerSignature: '0x00',
+      };
+
+      const userSignature = await getUserDigest(salesContract, user, order);
+      const relayerSignature = await getUserDigest(salesContract, relayer, order);
+
+      await expect(
+        salesContract.connect(user).preSalePurchase({
+          ...order,
+          userSignature,
+          relayerSignature,
+        }),
+      ).to.be.revertedWithCustomError(salesContract, 'RoundStageInvalid');
+    });
+
+    it('should revert when round has ended', async function () {
+      await salesContract.connect(sales).addToWhitelist(user.address);
+      await salesContract.connect(sales).setSaleStage(SaleStage.PreSale, currentRoundId);
+
+      // Advance time past round end
+      await time.increase(25 * 60 * 60); // 25 hours
+
+      const order = {
+        roundId: currentRoundId,
+        buyer: user.address,
+        gptAmount: ethers.parseUnits('10000', GPT_DECIMALS),
+        nonce: 0,
+        expiry: currentTime + 7200,
+        paymentToken: await usdc.getAddress(),
+        userSignature: '0x00',
+        relayerSignature: '0x00',
+      };
+
+      const userSignature = await getUserDigest(salesContract, user, order);
+      const relayerSignature = await getUserDigest(salesContract, relayer, order);
+
+      await expect(
+        salesContract.connect(user).preSalePurchase({
+          ...order,
+          userSignature,
+          relayerSignature,
+        }),
+      ).to.be.revertedWithCustomError(salesContract, 'RoundAlreadyEnded');
+    });
+
+    it('should revert with invalid nonce', async function () {
+      await salesContract.connect(sales).addToWhitelist(user.address);
+      await salesContract.connect(sales).setSaleStage(SaleStage.PreSale, currentRoundId);
+
+      const order = {
+        roundId: currentRoundId,
+        buyer: user.address,
+        gptAmount: ethers.parseUnits('10000', GPT_DECIMALS),
+        nonce: 1, // Invalid nonce (should be 0)
+        expiry: currentTime + 3600,
+        paymentToken: await usdc.getAddress(),
+        userSignature: '0x00',
+        relayerSignature: '0x00',
+      };
+
+      const userSignature = await getUserDigest(salesContract, user, order);
+      const relayerSignature = await getUserDigest(salesContract, relayer, order);
+
+      await expect(
+        salesContract.connect(user).preSalePurchase({
+          ...order,
+          userSignature,
+          relayerSignature,
+        }),
+      ).to.be.revertedWithCustomError(salesContract, 'InvalidNonce');
+    });
+
+    it('should revert when contract is paused', async function () {
+      await salesContract.connect(sales).addToWhitelist(user.address);
+      await salesContract.connect(sales).setSaleStage(SaleStage.PreSale, currentRoundId);
+
+      // Pause the contract
+      await salesContract.connect(admin).pause();
+
+      const order = {
+        roundId: currentRoundId,
+        buyer: user.address,
+        gptAmount: ethers.parseUnits('10000', GPT_DECIMALS),
+        nonce: 0,
+        expiry: currentTime + 3600,
+        paymentToken: await usdc.getAddress(),
+        userSignature: '0x00',
+        relayerSignature: '0x00',
+      };
+
+      const userSignature = await getUserDigest(salesContract, user, order);
+      const relayerSignature = await getUserDigest(salesContract, relayer, order);
+
+      await expect(
+        salesContract.connect(user).preSalePurchase({
+          ...order,
+          userSignature,
+          relayerSignature,
+        }),
+      ).to.be.revertedWithCustomError(salesContract, 'EnforcedPause');
+    });
+
+    it('should revert with invalid payment token', async function () {
+      await salesContract.connect(sales).addToWhitelist(user.address);
+      await salesContract.connect(sales).setSaleStage(SaleStage.PreSale, currentRoundId);
+
+      // Deploy new token that's not accepted
+      const MockERC20Factory = await ethers.getContractFactory('MockERC20');
+      const invalidToken = await MockERC20Factory.deploy();
+      await invalidToken.initialize('Invalid', 'INV', 18);
+
+      const order = {
+        roundId: currentRoundId,
+        buyer: user.address,
+        gptAmount: ethers.parseUnits('10000', GPT_DECIMALS),
+        nonce: 0,
+        expiry: currentTime + 3600,
+        paymentToken: await invalidToken.getAddress(),
+        userSignature: '0x00',
+        relayerSignature: '0x00',
+      };
+
+      const userSignature = await getUserDigest(salesContract, user, order);
+      const relayerSignature = await getUserDigest(salesContract, relayer, order);
+
+      await expect(
+        salesContract.connect(user).preSalePurchase({
+          ...order,
+          userSignature,
+          relayerSignature,
+        }),
+      )
+        .to.be.revertedWithCustomError(salesContract, 'TokenNotAccepted')
+        .withArgs(await invalidToken.getAddress());
+    });
+  });
 });
 
 // Helper functions
