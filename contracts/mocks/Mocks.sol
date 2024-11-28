@@ -6,6 +6,7 @@ import '@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20Burnable
 import '../vaults/TradingVault.sol';
 import '../vaults/BurnVault.sol';
 import '../libs/CalculationLib.sol';
+import '../rewards/RewardDistribution.sol';
 // Mock contracts
 contract MockERC20 is ERC20BurnableUpgradeable {
   uint8 private _decimals;
@@ -204,5 +205,18 @@ contract TestCalculationLib {
         tokenDecimals,
         tokensPerTroyOunce
       );
+  }
+}
+// Mock V2 Implementation for Upgradeability Test
+/// @custom:oz-upgrades-from RewardDistribution.sol:RewardDistribution
+contract RewardDistributionV2 is RewardDistribution {
+  uint256 private newVariable;
+
+  function setNewVariable(uint256 _value) external {
+    newVariable = _value;
+  }
+
+  function getNewVariable() external view returns (uint256) {
+    return newVariable;
   }
 }

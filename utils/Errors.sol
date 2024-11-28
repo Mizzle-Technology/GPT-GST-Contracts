@@ -44,4 +44,15 @@ library Errors {
   error OrderAlreadyExpired();
   error InvalidTimeRange(uint256 startTime, uint256 endTime);
   error ExceedMaxAllocation(uint256 amount, uint256 maxTokens);
+
+  // RewardDistribution errors
+  error SharesMustBeGreaterThanZero();
+  error TotalSharesExceedMaximum();
+  error ShareholderAlreadyExists(address account);
+  error ShareholderNotFound(address account);
+  error RewardsAlreadyLocked(address account);
+  error RewardsNotLocked(address account);
+  error ShareholderNotActivated(address account);
+  error ShareholderLocked(address account);
+  error NoSharesAssigned(address account);
 }

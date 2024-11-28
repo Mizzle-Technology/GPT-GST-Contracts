@@ -4,6 +4,18 @@ pragma solidity 0.8.28;
 import '@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol';
 
 interface IRewardDistribution {
+  struct Shareholder {
+    uint256 shares; // number of shares held by the shareholder
+    bool isLocked; // if true, rewards are locked for this shareholder
+    bool isActivated; // if true, the shareholder is active
+  }
+
+  struct Distribution {
+    address rewardToken; // Token used for rewards
+    uint256 totalRewards; // Total rewards in this distribution
+    uint256 distributionTime; // Time when rewards become claimable
+    mapping(address => bool) claimed; // Tracks whether a shareholder has claimed their reward
+  }
   // Events
   event SharesAllocated(address indexed account, uint256 shares);
   event SharesAdjusted(address indexed account, uint256 oldShares, uint256 newShares);
@@ -22,8 +34,7 @@ interface IRewardDistribution {
   event RewardTokenRemoved(address indexed rewardToken);
 
   // Share Management
-  function allocateShares(address account, uint256 shares) external;
-  function updateShareholderShares(address account, uint256 newShares) external;
+  function setShares(address account, uint256 newShares) external;
 
   // Rewards Management
   function topUpRewards(uint256 amount, address token) external;

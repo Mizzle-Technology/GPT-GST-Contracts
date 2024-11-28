@@ -9,9 +9,10 @@ import '@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol';
 import '@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol';
 import '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
 import '@openzeppelin/contracts/utils/structs/EnumerableSet.sol';
-import '../vault/TradingVault.sol';
+import '../vaults/TradingVault.sol';
 import './IRewardDistribution.sol';
 import '../libs/LinkedMap.sol';
+import '../../utils/Errors.sol';
 
 /**
  * @title RewardDistribution
@@ -39,19 +40,6 @@ contract RewardDistribution is
   // Represents 100% shares scaled by 1e18
   uint256 public constant SCALE = 1e18;
 
-  struct Shareholder {
-    uint256 shares; // number of shares held by the shareholder
-    bool isLocked; // if true, rewards are locked for this shareholder
-    bool isActivated; // if true, the shareholder is active
-  }
-
-  struct Distribution {
-    address rewardToken; // Token used for rewards
-    uint256 totalRewards; // Total rewards in this distribution
-    uint256 distributionTime; // Time when rewards become claimable
-    mapping(address => bool) claimed; // Tracks whether a shareholder has claimed their reward
-  }
-
   uint256 public totalShares; // total shares allocated
   uint256[50] private __gap; // gap for upgrade safety
   EnumerableSet.AddressSet private shareholderAddresses; // total number of shareholders
@@ -60,7 +48,6 @@ contract RewardDistribution is
 
   // Mapping to store shareholders and their shares
   mapping(address => Shareholder) public shareholders;
-  mapping(address => bool) public rewardsLocked; // User => Whether rewards are locked
   mapping(address => bool) public supportTokens; // Support tokens
   mapping(bytes32 => Distribution) public distributions; // Distribution ID => Distribution
 
@@ -68,6 +55,9 @@ contract RewardDistribution is
   uint256 public lastDistributionTime;
 
   function initialize(address _super, address _admin) public initializer {
+    if (_super == address(0) || _admin == address(0)) {
+      revert Errors.AddressCannotBeZero();
+    }
     __Ownable_init(msg.sender);
     __AccessControl_init();
     __ReentrancyGuard_init();
@@ -81,49 +71,26 @@ contract RewardDistribution is
 
     lastDistributionTime = block.timestamp;
 
-    // Initialize totalShares to 1e18 representing 100%
-    totalShares = SCALE;
+    // Initialize totalShares to 0%
+    totalShares = 0 * SCALE;
   }
 
-  // === 1. Allocate Shares ===
-  /**
-   * @notice Allocates shares to a shareholder.
-   *
-   * @param account The address of the shareholder.
-   * @param shares The number of shares to allocate.
-   *
-   * Requirements:
-   * - `account` cannot be the zero address.
-   * - `shares` must be greater than zero.
-   * - Total shares after allocation must not exceed `SCALE`.
-   *
-   * Emits a {SharesAllocated} event.
-   */
-  function allocateShares(
-    address account,
-    uint256 shares
-  ) external override onlyRole(ADMIN_ROLE) whenNotPaused {
-    require(account != address(0), 'Invalid account address');
-    require(shares > 0, 'Shares must be greater than zero');
-    require(totalShares + shares <= SCALE, 'Total shares exceed maximum');
-
-    Shareholder storage shareholder = shareholders[account];
-
-    if (shareholder.shares == 0) {
-      // New shareholder, add to the array
-      bool added = shareholderAddresses.add(account);
-      require(added, 'RewardDistribution: shareholder already exists');
-      shareholder.isActivated = true;
+  // === Modifiers ===
+  modifier onlyAdmin() {
+    if (!hasRole(ADMIN_ROLE, msg.sender)) {
+      revert Errors.AdminRoleNotGranted(msg.sender);
     }
-
-    // Add shares to the shareholder and update total shares
-    shareholder.shares += shares;
-    totalShares += shares;
-
-    emit SharesAllocated(account, shares);
+    _;
   }
 
-  // === 2. Adjust Shares ===
+  modifier onlyDefaultAdmin() {
+    if (!hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) {
+      revert Errors.DefaultAdminRoleNotGranted(msg.sender);
+    }
+    _;
+  }
+
+  // === Set Shares ===
   /**
    * @notice Updates the shares of a shareholder.
    *
@@ -133,26 +100,35 @@ contract RewardDistribution is
    * Requirements:
    * - `account` cannot be the zero address.
    * - `newShares` must not cause `totalShares` to exceed `SCALE`.
+   * Example of share allocation:
+   * - 100% shares = 1 * 1e18
+   * - 50% shares = 0.5 * 1e18
+   * - 1% shares = 0.01 * 1e18
+   * - 0.5% shares = 0.005 * 1e18
+   * The formula is: percentage * 1e18 / 100
    */
-  function updateShareholderShares(
-    address account,
-    uint256 newShares
-  ) external override onlyRole(ADMIN_ROLE) whenNotPaused {
+  function setShares(address account, uint256 newShares) external override onlyAdmin whenNotPaused {
     // === Checks ===
-    require(account != address(0), 'RewardDistribution: invalid account address');
+    if (account == address(0)) {
+      revert Errors.AddressCannotBeZero();
+    }
 
     Shareholder storage shareholder = shareholders[account];
     uint256 oldShares = shareholder.shares;
 
     // Calculate new total shares and validate
     uint256 updatedTotalShares = totalShares - oldShares + newShares;
-    require(updatedTotalShares <= SCALE, 'RewardDistribution: total shares exceed maximum');
+    if (updatedTotalShares > SCALE) {
+      revert Errors.TotalSharesExceedMaximum();
+    }
 
     // === Effects ===
     if (oldShares == 0 && newShares > 0) {
       // New shareholder, add to the array
       bool added = shareholderAddresses.add(account);
-      require(added, 'RewardDistribution: shareholder already exists');
+      if (!added) {
+        revert Errors.ShareholderAlreadyExists(account);
+      }
       shareholder.isActivated = true;
     }
 
@@ -163,7 +139,9 @@ contract RewardDistribution is
     // Handle deactivation and removal
     if (newShares == 0 && oldShares > 0) {
       bool removed = shareholderAddresses.remove(account);
-      require(removed, 'RewardDistribution: failed to remove shareholder');
+      if (!removed) {
+        revert Errors.ShareholderNotFound(account);
+      }
       shareholder.isActivated = false;
       emit ShareholderRemoved(account);
     }
@@ -251,9 +229,15 @@ contract RewardDistribution is
     require(block.timestamp >= distribution.distributionTime, 'Rewards not yet claimable');
 
     Shareholder storage shareholder = shareholders[msg.sender];
-    require(shareholder.isActivated, 'Shareholder not activated');
-    require(!shareholder.isLocked, 'Shareholder is locked');
-    require(shareholder.shares > 0, 'No shares assigned');
+    if (!shareholder.isActivated) {
+      revert Errors.ShareholderNotActivated(msg.sender);
+    }
+    if (shareholder.isLocked) {
+      revert Errors.ShareholderLocked(msg.sender);
+    }
+    if (shareholder.shares == 0) {
+      revert Errors.NoSharesAssigned(msg.sender);
+    }
 
     uint256 rewardAmount = (distribution.totalRewards * shareholder.shares) / SCALE;
     distribution.claimed[msg.sender] = true;
@@ -266,8 +250,12 @@ contract RewardDistribution is
 
   function claimAllRewards() external override nonReentrant whenNotPaused {
     Shareholder storage shareholder = shareholders[msg.sender];
-    require(shareholder.isActivated, 'Shareholder not activated');
-    require(!shareholder.isLocked, 'Shareholder is locked');
+    if (!shareholder.isActivated) {
+      revert Errors.ShareholderNotActivated(msg.sender);
+    }
+    if (shareholder.isLocked) {
+      revert Errors.ShareholderLocked(msg.sender);
+    }
 
     bytes32 currentId = distributionList.getHead();
 
@@ -298,8 +286,16 @@ contract RewardDistribution is
    * - Rewards must not already be locked for the user.
    */
   function lockRewards(address user) external override onlyRole(ADMIN_ROLE) {
-    require(!rewardsLocked[user], 'Rewards already locked');
-    rewardsLocked[user] = true;
+    if (user == address(0)) {
+      revert Errors.AddressCannotBeZero();
+    }
+    Shareholder storage shareholder = shareholders[user];
+
+    if (shareholder.isLocked) {
+      revert Errors.RewardsAlreadyLocked(user);
+    }
+    shareholder.isLocked = true;
+
     emit RewardsLocked(user);
   }
 
@@ -313,13 +309,22 @@ contract RewardDistribution is
    * - Rewards must already be locked for the user.
    */
   function unlockRewards(address user) external override onlyRole(ADMIN_ROLE) {
-    require(rewardsLocked[user], 'Rewards not locked');
-    rewardsLocked[user] = false;
+    if (user == address(0)) {
+      revert Errors.AddressCannotBeZero();
+    }
+    Shareholder storage shareholder = shareholders[user];
+    if (!shareholder.isLocked) {
+      revert Errors.RewardsNotLocked(user);
+    }
+    shareholder.isLocked = false;
+
     emit RewardsUnlocked(user);
   }
 
   function isRewardToken(address token) external view override returns (bool) {
-    require(token != address(0), 'Invalid token address');
+    if (token == address(0)) {
+      revert Errors.AddressCannotBeZero();
+    }
     return supportTokens[token];
   }
 
@@ -393,7 +398,9 @@ contract RewardDistribution is
   function getShareholders(
     address account
   ) external view returns (uint256 shares, bool isLocked, bool isActivated) {
-    require(account != address(0), 'Invalid account address');
+    if (account == address(0)) {
+      revert Errors.AddressCannotBeZero();
+    }
     Shareholder storage shareholder = shareholders[account];
     return (shareholder.shares, shareholder.isLocked, shareholder.isActivated);
   }
