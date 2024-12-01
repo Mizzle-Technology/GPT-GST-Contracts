@@ -19,7 +19,7 @@ import '../libs/SalesLib.sol';
 import '../libs/LinkedMap.sol';
 import '../vaults/TradingVault.sol';
 import './ISalesContract.sol';
-import {Errors} from '../../utils/Errors.sol';
+import '../utils/Errors.sol';
 
 /**
  * @title SalesContract

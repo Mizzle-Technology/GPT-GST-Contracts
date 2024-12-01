@@ -12,7 +12,7 @@ import '@openzeppelin/contracts/utils/structs/EnumerableSet.sol';
 import '../vaults/TradingVault.sol';
 import './IRewardDistribution.sol';
 import '../libs/LinkedMap.sol';
-import '../../utils/Errors.sol';
+import '../utils/Errors.sol';
 
 /**
  * @title RewardDistribution

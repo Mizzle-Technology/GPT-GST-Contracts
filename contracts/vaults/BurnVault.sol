@@ -11,7 +11,7 @@ import '@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20Burnable
 import '@openzeppelin/contracts/utils/structs/EnumerableSet.sol';
 import {UUPSUpgradeable} from '@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol';
 import './IBurnVault.sol';
-import {Errors} from '../../utils/Errors.sol';
+import {Errors} from '../utils/Errors.sol';
 
 contract BurnVault is
   Initializable,

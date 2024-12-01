@@ -8,7 +8,7 @@ import '@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol';
 import '@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol';
 import '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
 import './ITradingVault.sol';
-import '../../utils/Errors.sol';
+import {Errors} from '../utils/Errors.sol';
 
 contract TradingVault is
   Initializable,
