@@ -4,6 +4,7 @@ pragma solidity 0.8.28;
 // Core functionality
 import '@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol';
 import '@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20BurnableUpgradeable.sol';
+import '@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20PermitUpgradeable.sol';
 import '@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol';
 import '@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol';
 import '@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol';
@@ -29,6 +30,7 @@ contract GoldPackToken is
   AccessControlUpgradeable,
   PausableUpgradeable,
   ReentrancyGuardUpgradeable,
+  ERC20PermitUpgradeable,
   OwnableUpgradeable,
   UUPSUpgradeable,
   IGoldPackToken
@@ -60,10 +62,13 @@ contract GoldPackToken is
    * - _super, _admin, and _sales_manager cannot be the zero address
    */
   function initialize(address _super, address _admin, address _sales_manager) public initializer {
-    __ERC20_init('Gold Pack Token', 'GPT');
+    __ERC20_init('GoldPack Token', 'GPT');
     __ERC20Burnable_init();
     __AccessControl_init();
     __ReentrancyGuard_init();
+    __ERC20Permit_init('Gold Pack Token');
+    __Pausable_init();
+    __UUPSUpgradeable_init();
     __Pausable_init();
     __Ownable_init(_super);
 

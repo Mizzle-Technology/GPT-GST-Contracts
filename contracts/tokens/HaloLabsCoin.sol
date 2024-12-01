@@ -9,6 +9,8 @@ import '@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol';
 import '@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol';
 import '@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol';
 import '@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20PausableUpgradeable.sol';
+import '@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol';
+import '../utils/Errors.sol';
 
 /**
  * @title MizzleTechToken
@@ -22,7 +24,8 @@ contract HaloLabsCoin is
   AccessControlUpgradeable,
   ReentrancyGuardUpgradeable,
   ERC20PausableUpgradeable,
-  UUPSUpgradeable
+  UUPSUpgradeable,
+  OwnableUpgradeable
 {
   // Admin role
   bytes32 public constant ADMIN_ROLE = keccak256('ADMIN_ROLE');
@@ -36,7 +39,7 @@ contract HaloLabsCoin is
   event TokensMinted(address indexed to, uint256 amount);
   event TokensDistributed(address indexed to, uint256 amount);
 
-  function initialize(address admin) public initializer {
+  function initialize(address _super, address _admin) public initializer {
     __ERC20_init('Halo Labs Coin', 'HLC');
     __ERC20Capped_init(INITIAL_SUPPLY);
     __ERC20Burnable_init();
@@ -44,11 +47,11 @@ contract HaloLabsCoin is
     __AccessControl_init();
     __ReentrancyGuard_init();
     __Pausable_init();
-    __UUPSUpgradeable_init();
     __ERC20Pausable_init();
+    __Ownable_init(_super);
 
-    _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
-    _grantRole(ADMIN_ROLE, admin);
+    _grantRole(DEFAULT_ADMIN_ROLE, _super);
+    _grantRole(ADMIN_ROLE, _admin);
     _setRoleAdmin(ADMIN_ROLE, DEFAULT_ADMIN_ROLE);
 
     _mint(address(this), INITIAL_SUPPLY);
@@ -60,6 +63,34 @@ contract HaloLabsCoin is
     return DECIMALS;
   }
 
+  // === Modifiers ===
+  modifier onlyAdmin() {
+    if (!hasRole(ADMIN_ROLE, msg.sender)) {
+      revert Errors.AdminRoleNotGranted(msg.sender);
+    }
+    _;
+  }
+
+  modifier onlyDefaultAdmin() {
+    if (!hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) {
+      revert Errors.DefaultAdminRoleNotGranted(msg.sender);
+    }
+    _;
+  }
+
+  /**
+   * @notice Distributes tokens from the contract to a recipient
+   * @param recipient The address to receive tokens
+   * @param amount The amount of tokens to distribute
+   * @param deadline The deadline for the permit signature
+   * @param v The v component of the permit signature
+   * @param r The r component of the permit signature
+   * @param s The s component of the permit signature
+   * Requirements:
+   * - Only callable by admin
+   * - Recipient cannot be zero address
+   * - Amount must be > 0 and <= contract balance
+   */
   function distribute(
     address recipient,
     uint256 amount,
@@ -67,16 +98,24 @@ contract HaloLabsCoin is
     uint8 v,
     bytes32 r,
     bytes32 s
-  ) external onlyRole(ADMIN_ROLE) {
+  ) external whenNotPaused nonReentrant onlyAdmin {
+    // Input validation
+    if (recipient == address(0)) {
+      revert Errors.AddressCannotBeZero();
+    }
+    if (amount == 0) {
+      revert Errors.InvalidAmount(amount);
+    }
+
+    uint256 contractBalance = balanceOf(address(this));
+    if (contractBalance < amount) {
+      revert Errors.InsufficientBalance(contractBalance, amount);
+    }
+
     // Use permit to approve the transfer
     permit(msg.sender, address(this), amount, deadline, v, r, s);
-    // check if the recipient is not the zero address
-    require(recipient != address(0), 'MizzleTechToken: recipient is the zero address');
-    // check if the amount is not zero
-    require(amount > 0, 'MizzleTechToken: amount is zero');
-    // check if the amount is not greater than the balance of the contract
-    require(balanceOf(address(this)) >= amount, 'MizzleTechToken: insufficient balance');
 
+    // Transfer tokens
     _transfer(address(this), recipient, amount);
     emit TokensDistributed(recipient, amount);
   }
@@ -91,15 +130,15 @@ contract HaloLabsCoin is
   }
 
   // Authorize upgrade function required by UUPSUpgradeable
-  function _authorizeUpgrade(address newImplementation) internal override onlyRole(ADMIN_ROLE) {}
+  function _authorizeUpgrade(address newImplementation) internal override onlyDefaultAdmin {}
 
   // Pause and unpause functions
-  function pause() external onlyRole(ADMIN_ROLE) {
+  function pause() external onlyAdmin {
     _pause();
     emit Paused(msg.sender);
   }
 
-  function unpause() external onlyRole(ADMIN_ROLE) {
+  function unpause() external onlyAdmin {
     _unpause();
     emit Unpaused(msg.sender);
   }

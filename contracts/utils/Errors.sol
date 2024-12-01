@@ -7,7 +7,7 @@ library Errors {
   error AddressCannotBeZero();
   error InvalidAmount(uint256 amount);
   error DuplicatedToken(address token);
-
+  error InsufficientAllowance(uint256 allowance, uint256 amount);
   // AccessControl errors
   error DefaultAdminRoleNotGranted(address account);
   error AdminRoleNotGranted(address account);
@@ -44,7 +44,8 @@ library Errors {
   error OrderAlreadyExpired();
   error InvalidTimeRange(uint256 startTime, uint256 endTime);
   error ExceedMaxAllocation(uint256 amount, uint256 maxTokens);
-
+  error CannotRecoverGptToken();
+  error AddressNotWhitelisted(address addr);
   // RewardDistribution errors
   error SharesMustBeGreaterThanZero();
   error TotalSharesExceedMaximum();

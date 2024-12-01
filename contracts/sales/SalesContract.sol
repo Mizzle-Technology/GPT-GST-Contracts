@@ -531,13 +531,15 @@ contract SalesContract is
    * - Amount must be <= balance
    */
   function recoverERC20(address token, uint256 amount) external override onlyAdmin {
-    require(token != address(gptToken), 'Cannot recover GPT token');
-    require(amount > 0, 'Amount must be greater than 0');
-    require(ERC20Upgradeable(token).balanceOf(address(this)) >= amount, 'Insufficient balance');
-
-    // check allowance
-    uint256 allowance = ERC20Upgradeable(token).allowance(address(this), msg.sender);
-    require(allowance >= amount, 'Token allowance too low');
+    if (token == address(gptToken)) {
+      revert Errors.CannotRecoverGptToken();
+    }
+    if (amount == 0) {
+      revert Errors.InvalidAmount(amount);
+    }
+    if (ERC20Upgradeable(token).balanceOf(address(this)) < amount) {
+      revert Errors.InsufficientBalance(ERC20Upgradeable(token).balanceOf(address(this)), amount);
+    }
 
     ERC20Upgradeable(token).safeTransfer(msg.sender, amount);
     emit TokenRecovered(token, amount, msg.sender);
@@ -569,8 +571,12 @@ contract SalesContract is
    * Emits a {WhitelistRemoved} event.
    */
   function removeFromWhitelist(address addr) external override onlySales {
-    require(addr != address(0), 'Invalid address');
-    require(whitelistedAddresses[addr], 'Address not whitelisted');
+    if (addr == address(0)) {
+      revert Errors.AddressCannotBeZero();
+    }
+    if (!whitelistedAddresses[addr]) {
+      revert Errors.AddressNotWhitelisted(addr);
+    }
 
     whitelistedAddresses[addr] = false;
     delete whitelistedAddresses[addr];

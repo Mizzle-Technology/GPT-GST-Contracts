@@ -468,6 +468,70 @@ describe('SalesContract Tests', function () {
         salesContract.connect(sales).createRound(0, currentTime, currentTime + 24 * 60 * 60),
       ).to.be.revertedWithCustomError(salesContract, 'InvalidAmount');
     });
+
+    it('should revert when activating expired round', async function () {
+      const currentTime = await time.latest();
+      const roundTx = await salesContract.connect(sales).createRound(
+        ethers.parseUnits('100000', GPT_DECIMALS),
+        currentTime,
+        currentTime + 60, // 1 minute duration
+      );
+
+      const receipt = await roundTx.wait();
+      const log = receipt?.logs.find(
+        (log) => salesContract.interface.parseLog(log)?.name === 'RoundCreated',
+      );
+      const roundId = salesContract.interface.parseLog(log!)?.args[0];
+
+      // Advance time past round end
+      await time.increase(120); // 2 minutes
+
+      await expect(
+        salesContract.connect(sales).setSaleStage(SaleStage.PublicSale, roundId),
+      ).to.be.revertedWithCustomError(salesContract, 'RoundAlreadyEnded');
+    });
+
+    it('should track multiple rounds correctly', async function () {
+      const currentTime = await time.latest();
+
+      // Create first round
+      const round1Tx = await salesContract
+        .connect(sales)
+        .createRound(ethers.parseUnits('100000', GPT_DECIMALS), currentTime, currentTime + 3600);
+
+      // Create second round
+      const round2Tx = await salesContract
+        .connect(sales)
+        .createRound(
+          ethers.parseUnits('200000', GPT_DECIMALS),
+          currentTime + 3600,
+          currentTime + 7200,
+        );
+
+      const [round1Id, round2Id] = await Promise.all([
+        round1Tx.wait().then((r) => {
+          const log = r?.logs.find(
+            (log) => salesContract.interface.parseLog(log)?.name === 'RoundCreated',
+          );
+          return salesContract.interface.parseLog(log!)?.args[0];
+        }),
+        round2Tx.wait().then((r) => {
+          const log = r?.logs.find(
+            (log) => salesContract.interface.parseLog(log)?.name === 'RoundCreated',
+          );
+          return salesContract.interface.parseLog(log!)?.args[0];
+        }),
+      ]);
+
+      // Verify rounds are tracked in order
+      expect(await salesContract.latestRoundId()).to.equal(round2Id);
+
+      const round1 = await salesContract.rounds(round1Id);
+      const round2 = await salesContract.rounds(round2Id);
+
+      expect(round1.maxTokens).to.equal(ethers.parseUnits('100000', GPT_DECIMALS));
+      expect(round2.maxTokens).to.equal(ethers.parseUnits('200000', GPT_DECIMALS));
+    });
   });
 
   describe('Payment Token Management', () => {
@@ -963,6 +1027,293 @@ describe('SalesContract Tests', function () {
       )
         .to.be.revertedWithCustomError(salesContract, 'TokenNotAccepted')
         .withArgs(await invalidToken.getAddress());
+    });
+  });
+
+  describe('Token Management', () => {
+    it('should add accepted token correctly', async function () {
+      const MockERC20Factory = await ethers.getContractFactory('MockERC20');
+      const MockAggregatorFactory = await ethers.getContractFactory('MockAggregator');
+      // Deploy new mock token and price feed
+      const newToken = await MockERC20Factory.deploy();
+      await newToken.initialize('TEST', 'TEST', 18);
+      const newPriceFeed = await MockAggregatorFactory.deploy();
+      await newPriceFeed.setPrice(ethers.parseUnits('1', 8));
+
+      await salesContract.addAcceptedToken(
+        await newToken.getAddress(),
+        await newPriceFeed.getAddress(),
+        18,
+      );
+
+      const tokenConfig = await salesContract.acceptedTokens(await newToken.getAddress());
+      expect(tokenConfig.isAccepted).to.be.true;
+      expect(tokenConfig.priceFeed).to.equal(await newPriceFeed.getAddress());
+      expect(tokenConfig.decimals).to.equal(18);
+    });
+
+    it('should revert when non-admin adds token', async function () {
+      await expect(
+        salesContract.connect(user).addAcceptedToken(ethers.ZeroAddress, ethers.ZeroAddress, 18),
+      ).to.be.revertedWithCustomError(salesContract, 'DefaultAdminRoleNotGranted');
+    });
+  });
+
+  describe('Price Calculations', () => {
+    it('should calculate payment amounts correctly with different decimals', async function () {
+      const MockERC20Factory = await ethers.getContractFactory('MockERC20');
+      const MockAggregatorFactory = await ethers.getContractFactory('MockAggregator');
+
+      // Deploy token with 18 decimals
+      const token18 = await MockERC20Factory.deploy();
+      await token18.initialize('TEST18', 'TEST18', 18);
+      const priceFeed18 = await MockAggregatorFactory.deploy();
+      await priceFeed18.setPrice(ethers.parseUnits('1', 8)); // $1.00
+
+      await salesContract.addAcceptedToken(
+        await token18.getAddress(),
+        await priceFeed18.getAddress(),
+        18,
+      );
+
+      const gptAmount = ethers.parseUnits('10000', GPT_DECIMALS); // 10,000 GPT
+
+      // Calculate for USDC (6 decimals) and token18 (18 decimals)
+      const usdcAmount = await salesContract.queryPaymentTokenAmount(
+        gptAmount,
+        await usdc.getAddress(),
+      );
+      const token18Amount = await salesContract.queryPaymentTokenAmount(
+        gptAmount,
+        await token18.getAddress(),
+      );
+
+      // Verify calculations account for decimal differences
+      expect(usdcAmount).to.equal(ethers.parseUnits('2000', 6)); // $2000 with 6 decimals
+      expect(token18Amount).to.equal(ethers.parseUnits('2000', 18)); // $2000 with 18 decimals
+    });
+  });
+
+  describe('Emergency Functions', () => {
+    let currentRoundId: string;
+    let currentTime: number;
+
+    this.beforeEach(async () => {
+      currentTime = await time.latest();
+      // Create and activate round
+      const createdRoundTx = await salesContract
+        .connect(sales)
+        .createRound(
+          ethers.parseUnits('100000', GPT_DECIMALS),
+          currentTime,
+          currentTime + 24 * 60 * 60,
+        );
+      const receipt = await createdRoundTx.wait();
+      if (!receipt) {
+        throw new Error('Round creation failed');
+      }
+      // retrieve currentRoundId from event
+      const roundCreatedEvent = receipt.logs.find(
+        (log) => salesContract.interface.parseLog(log)?.name === 'RoundCreated',
+      );
+
+      if (!roundCreatedEvent) {
+        throw new Error('Round creation event not found');
+      }
+
+      const parseLog = salesContract.interface.parseLog(roundCreatedEvent);
+      currentRoundId = parseLog?.args[0];
+    });
+
+    it('should prevent purchases when paused', async function () {
+      await salesContract.connect(admin).pause();
+
+      const currentTime = await time.latest();
+      const order = {
+        roundId: currentRoundId,
+        buyer: user.address,
+        gptAmount: ethers.parseUnits('10000', GPT_DECIMALS),
+        nonce: await salesContract.nonces(user.address),
+        expiry: currentTime + 3600,
+        paymentToken: await usdc.getAddress(),
+        userSignature: '0x00',
+        relayerSignature: '0x00',
+      };
+
+      const userSignature = await getUserDigest(salesContract, user, order);
+      const relayerSignature = await getUserDigest(salesContract, relayer, order);
+      order.userSignature = userSignature;
+      order.relayerSignature = relayerSignature;
+
+      await expect(
+        salesContract.connect(user).authorizePurchase(order),
+      ).to.be.revertedWithCustomError(salesContract, 'EnforcedPause');
+    });
+  });
+
+  describe('Recovery Functions', () => {
+    let mockToken: MockERC20;
+
+    beforeEach(async () => {
+      // Deploy mock token
+      const MockERC20Factory = await ethers.getContractFactory('MockERC20');
+      mockToken = await MockERC20Factory.deploy();
+      await mockToken.initialize('Mock', 'MCK', 18);
+
+      // Mint tokens to sales contract
+      await mockToken.mint(await salesContract.getAddress(), ethers.parseUnits('1000', 18));
+    });
+
+    it('should successfully recover ERC20 tokens', async () => {
+      const amount = ethers.parseUnits('100', 18);
+
+      // Approve admin to spend tokens
+      await mockToken.connect(admin).approve(await salesContract.getAddress(), amount);
+
+      // Record initial balances
+      const initialContractBalance = await mockToken.balanceOf(await salesContract.getAddress());
+      const initialAdminBalance = await mockToken.balanceOf(admin.address);
+
+      // Recover tokens
+      await expect(salesContract.connect(admin).recoverERC20(await mockToken.getAddress(), amount))
+        .to.emit(salesContract, 'TokenRecovered')
+        .withArgs(await mockToken.getAddress(), amount, admin.address);
+
+      // Verify balances
+      expect(await mockToken.balanceOf(await salesContract.getAddress())).to.equal(
+        initialContractBalance - amount,
+      );
+      expect(await mockToken.balanceOf(admin.address)).to.equal(initialAdminBalance + amount);
+    });
+
+    it('should revert if caller is not admin', async () => {
+      const amount = ethers.parseUnits('100', 18);
+
+      await expect(
+        salesContract.connect(user).recoverERC20(await mockToken.getAddress(), amount),
+      ).to.be.revertedWithCustomError(salesContract, 'AdminRoleNotGranted');
+    });
+
+    it('should revert when trying to recover GPT token', async () => {
+      const amount = ethers.parseUnits('100', 18);
+
+      await expect(
+        salesContract.connect(admin).recoverERC20(await gptToken.getAddress(), amount),
+      ).to.be.revertedWithCustomError(salesContract, 'CannotRecoverGptToken');
+    });
+
+    it('should revert when amount is zero', async () => {
+      await expect(
+        salesContract.connect(admin).recoverERC20(await mockToken.getAddress(), 0),
+      ).to.be.revertedWithCustomError(salesContract, 'InvalidAmount');
+    });
+
+    it('should revert when contract balance is insufficient', async () => {
+      const amount = ethers.parseUnits('2000', 18); // More than minted amount
+
+      await expect(
+        salesContract.connect(admin).recoverERC20(await mockToken.getAddress(), amount),
+      ).to.be.revertedWithCustomError(salesContract, 'InsufficientBalance');
+    });
+  });
+
+  describe('Whitelist Management', () => {
+    let whitelistedUser: SignerWithAddress;
+
+    beforeEach(async () => {
+      whitelistedUser = await ethers.provider.getSigner(10);
+      // Add user to whitelist first
+      await salesContract.connect(sales).addToWhitelist(whitelistedUser.address);
+    });
+
+    describe('removeFromWhitelist', () => {
+      it('should successfully remove an address from whitelist', async () => {
+        // Verify user is whitelisted
+        expect(await salesContract.whitelistedAddresses(whitelistedUser.address)).to.be.true;
+
+        // Remove from whitelist
+        await expect(salesContract.connect(sales).removeFromWhitelist(whitelistedUser.address))
+          .to.emit(salesContract, 'AddressRemoved')
+          .withArgs(whitelistedUser.address);
+
+        // Verify user is no longer whitelisted
+        expect(await salesContract.whitelistedAddresses(whitelistedUser.address)).to.be.false;
+      });
+
+      it('should revert when caller does not have SALES_ROLE', async () => {
+        await expect(salesContract.connect(user).removeFromWhitelist(whitelistedUser.address))
+          .to.be.revertedWithCustomError(salesContract, 'SalesRoleNotGranted')
+          .withArgs(user.address);
+      });
+
+      it('should revert when trying to remove zero address', async () => {
+        await expect(
+          salesContract.connect(sales).removeFromWhitelist(ethers.ZeroAddress),
+        ).to.be.revertedWithCustomError(salesContract, 'AddressCannotBeZero');
+      });
+
+      it('should revert when address is not whitelisted', async () => {
+        const nonWhitelistedUser = await ethers.provider.getSigner(11);
+
+        await expect(salesContract.connect(sales).removeFromWhitelist(nonWhitelistedUser.address))
+          .to.be.revertedWithCustomError(salesContract, 'AddressNotWhitelisted')
+          .withArgs(nonWhitelistedUser.address);
+      });
+
+      it('should not allow removed address to participate in presale', async () => {
+        // Remove from whitelist
+        await salesContract.connect(sales).removeFromWhitelist(whitelistedUser.address);
+
+        // Create a round
+        const currentTime = await time.latest();
+        const roundTx = await salesContract
+          .connect(sales)
+          .createRound(
+            ethers.parseUnits('100000', GPT_DECIMALS),
+            currentTime,
+            currentTime + 24 * 60 * 60,
+          );
+
+        const receipt = await roundTx.wait();
+        const roundCreatedEvent = receipt?.logs.find(
+          (log) => salesContract.interface.parseLog(log)?.name === 'RoundCreated',
+        );
+        const roundId = salesContract.interface.parseLog(roundCreatedEvent!)?.args[0];
+
+        // Set to PreSale stage
+        await salesContract.connect(sales).setSaleStage(SaleStage.PreSale, roundId);
+
+        // Attempt presale purchase
+        const order = {
+          roundId: roundId,
+          buyer: whitelistedUser.address,
+          gptAmount: ethers.parseUnits('10000', GPT_DECIMALS),
+          nonce: await salesContract.nonces(whitelistedUser.address),
+          expiry: currentTime + 3600,
+          paymentToken: await usdc.getAddress(),
+          userSignature: '0x00',
+          relayerSignature: '0x00',
+        };
+
+        const userSignature = await getUserDigest(salesContract, whitelistedUser, order);
+        const relayerSignature = await getUserDigest(salesContract, relayer, order);
+        order.userSignature = userSignature;
+        order.relayerSignature = relayerSignature;
+
+        await expect(
+          salesContract.connect(whitelistedUser).preSalePurchase(order),
+        ).to.be.revertedWithCustomError(salesContract, 'NotWhitelisted');
+      });
+
+      it('should allow re-adding a previously removed address', async () => {
+        // Remove from whitelist
+        await salesContract.connect(sales).removeFromWhitelist(whitelistedUser.address);
+        expect(await salesContract.whitelistedAddresses(whitelistedUser.address)).to.be.false;
+
+        // Re-add to whitelist
+        await salesContract.connect(sales).addToWhitelist(whitelistedUser.address);
+        expect(await salesContract.whitelistedAddresses(whitelistedUser.address)).to.be.true;
+      });
     });
   });
 });
