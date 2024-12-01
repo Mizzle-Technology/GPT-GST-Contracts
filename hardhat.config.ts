@@ -4,6 +4,7 @@ import '@nomicfoundation/hardhat-toolbox';
 import '@openzeppelin/hardhat-upgrades';
 import '@typechain/hardhat';
 import '@typechain/ethers-v6';
+import 'solidity-coverage';
 
 const config: HardhatUserConfig = {
   solidity: {
