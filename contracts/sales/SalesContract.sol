@@ -309,104 +309,7 @@ contract SalesContract is
       revert Errors.NotWhitelisted();
     }
 
-    if (order.buyer != msg.sender) {
-      revert Errors.BuyerMismatch();
-    }
-
-    if (currentRound.stage == SaleStage.SaleEnded || block.timestamp > currentRound.endTime) {
-      revert Errors.RoundAlreadyEnded();
-    }
-
-    if (!currentRound.isActive) {
-      revert Errors.RoundNotActive();
-    }
-
-    if (block.timestamp > order.expiry) {
-      revert Errors.OrderAlreadyExpired();
-    }
-
-    if (order.nonce != nonces[order.buyer]) {
-      revert Errors.InvalidNonce(order.nonce);
-    }
-
-    if (block.timestamp < currentRound.startTime) {
-      revert Errors.RoundNotStarted();
-    }
-
-    // check order expiry
-    if (block.timestamp > order.expiry) {
-      revert Errors.OrderAlreadyExpired();
-    }
-
-    TokenConfig storage tokenConfig = acceptedTokens[order.paymentToken];
-
-    if (!tokenConfig.isAccepted) {
-      revert Errors.TokenNotAccepted(order.paymentToken);
-    }
-
-    if (order.gptAmount == 0) {
-      revert Errors.InvalidAmount(order.gptAmount);
-    }
-
-    if (order.gptAmount > currentRound.maxTokens) {
-      revert Errors.ExceedMaxAllocation(order.gptAmount, currentRound.maxTokens);
-    }
-
-    // Compute user order hash
-    bytes32 orderHash = keccak256(
-      abi.encode(
-        ORDER_TYPEHASH,
-        order.roundId,
-        order.buyer,
-        order.gptAmount,
-        order.nonce,
-        order.expiry,
-        order.paymentToken
-      )
-    );
-
-    // Verify user signature using SalesLib
-    bool isUserSignatureValid = SalesLib.verifySignature(
-      DOMAIN_SEPARATOR,
-      orderHash,
-      order.buyer,
-      order.userSignature
-    );
-
-    if (!isUserSignatureValid) {
-      revert Errors.InvalidUserSignature(order.userSignature);
-    }
-
-    // Verify relayer signature using SalesLib
-    bool isRelayerSignatureValid = SalesLib.verifySignature(
-      DOMAIN_SEPARATOR,
-      orderHash,
-      trustedSigner,
-      order.relayerSignature
-    );
-
-    if (!isRelayerSignatureValid) {
-      revert Errors.InvalidRelayerSignature(order.relayerSignature);
-    }
-
-    if (!currentRound.isActive) {
-      revert Errors.RoundNotActive();
-    }
-
-    // Process the purchase using SalesLib
-    SalesLib.processPurchase(
-      goldPriceFeed,
-      tokenConfig,
-      tradingVault,
-      gptToken,
-      currentRound,
-      order.gptAmount,
-      order.paymentToken,
-      order.buyer,
-      TOKENS_PER_TROY_OUNCE
-    );
-
-    nonces[order.buyer]++;
+    _processOrder(order);
   }
 
   /**
@@ -418,8 +321,23 @@ contract SalesContract is
     if (currentRound.stage != SaleStage.PublicSale) {
       revert Errors.RoundStageInvalid();
     }
+
+    _processOrder(order);
+  }
+
+  /**
+   * @notice Processes an order
+   * @param order The order to process
+   */
+  function _processOrder(Order calldata order) private {
+    Round storage currentRound = rounds[order.roundId];
+
     if (order.buyer != msg.sender) {
       revert Errors.BuyerMismatch();
+    }
+
+    if (order.gptAmount == 0) {
+      revert Errors.InvalidAmount(order.gptAmount);
     }
 
     if (currentRound.stage == SaleStage.SaleEnded || block.timestamp > currentRound.endTime) {
@@ -440,11 +358,6 @@ contract SalesContract is
 
     if (block.timestamp < currentRound.startTime) {
       revert Errors.RoundNotStarted();
-    }
-
-    // check order expiry
-    if (block.timestamp > order.expiry) {
-      revert Errors.OrderAlreadyExpired();
     }
 
     if (order.gptAmount > currentRound.maxTokens) {
@@ -469,31 +382,28 @@ contract SalesContract is
       )
     );
 
-    // Verify user signature using SalesLib
+    // Verify signatures
     bool isUserSignatureValid = SalesLib.verifySignature(
       DOMAIN_SEPARATOR,
       orderHash,
       order.buyer,
       order.userSignature
     );
-
     if (!isUserSignatureValid) {
       revert Errors.InvalidUserSignature(order.userSignature);
     }
 
-    // Verify relayer signature using SalesLib
     bool isRelayerSignatureValid = SalesLib.verifySignature(
       DOMAIN_SEPARATOR,
       orderHash,
       trustedSigner,
       order.relayerSignature
     );
-
     if (!isRelayerSignatureValid) {
       revert Errors.InvalidRelayerSignature(order.relayerSignature);
     }
 
-    // Process the purchase using SalesLib
+    // Process the purchase
     SalesLib.processPurchase(
       goldPriceFeed,
       tokenConfig,
