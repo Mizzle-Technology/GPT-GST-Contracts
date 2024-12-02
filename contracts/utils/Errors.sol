@@ -8,6 +8,10 @@ library Errors {
   error InvalidAmount(uint256 amount);
   error DuplicatedToken(address token);
   error InsufficientAllowance(uint256 allowance, uint256 amount);
+  error MaxSizeExceeded();
+  error EmptyList();
+  error InvalidTokenPrice();
+  error TokenPriceStale();
   // AccessControl errors
   error DefaultAdminRoleNotGranted(address account);
   error AdminRoleNotGranted(address account);

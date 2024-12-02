@@ -102,6 +102,13 @@ contract GoldPackToken is
     _;
   }
 
+  modifier onlyDefaultAdminRole() {
+    if (!hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) {
+      revert Errors.DefaultAdminRoleNotGranted(msg.sender);
+    }
+    _;
+  }
+
   /**
    * @dev Mints tokens to the specified address.
    * @param to The address to mint tokens to
@@ -116,7 +123,7 @@ contract GoldPackToken is
 
   // == Burn Vault Functions ==
 
-  function setBurnVault(address _burnVault) external whenNotPaused onlyRole(DEFAULT_ADMIN_ROLE) {
+  function setBurnVault(address _burnVault) external whenNotPaused onlyDefaultAdminRole {
     require(_burnVault != address(0), 'GoldPackToken: burn vault cannot be the zero address');
     burnVault = BurnVault(_burnVault);
 
@@ -227,5 +234,5 @@ contract GoldPackToken is
   // === UUPS Upgrade ===
   function _authorizeUpgrade(
     address newImplementation
-  ) internal view override onlyRole(DEFAULT_ADMIN_ROLE) {}
+  ) internal view override onlyDefaultAdminRole {}
 }

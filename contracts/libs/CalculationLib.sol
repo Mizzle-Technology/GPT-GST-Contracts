@@ -2,6 +2,7 @@
 pragma solidity 0.8.28;
 
 import '@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol';
+import '../utils/Errors.sol';
 
 library CalculationLib {
   uint256 public constant MAX_PRICE_AGE = 1 hours;
@@ -117,7 +118,7 @@ library CalculationLib {
     uint256 minAllowedTimestamp = MAX_PRICE_AGE > block.timestamp
       ? 0
       : block.timestamp - MAX_PRICE_AGE;
-    require(tokenPrice > 0, 'Invalid token price from feed');
-    require(tokenUpdatedAt >= minAllowedTimestamp, 'Token price data is stale');
+    if (tokenPrice <= 0) revert Errors.InvalidTokenPrice();
+    if (tokenUpdatedAt < minAllowedTimestamp) revert Errors.TokenPriceStale();
   }
 }

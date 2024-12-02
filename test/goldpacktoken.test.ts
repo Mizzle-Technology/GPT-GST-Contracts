@@ -3,17 +3,17 @@
 import { expect } from 'chai';
 import { ethers, upgrades } from 'hardhat';
 import { GoldPackToken, BurnVault } from '../typechain-types';
-import { Signer } from 'ethers';
+import { SignerWithAddress } from '@nomicfoundation/hardhat-ethers/signers';
 
 describe('GoldPackToken', function () {
   let gpt: GoldPackToken;
   let burnVault: BurnVault;
 
   // Roles
-  let superAdmin: Signer;
-  let admin: Signer;
-  let sales: Signer;
-  let user: Signer;
+  let superAdmin: SignerWithAddress;
+  let admin: SignerWithAddress;
+  let sales: SignerWithAddress;
+  let user: SignerWithAddress;
   let burnVaultProxy: string;
   let gptproxy: string;
 
@@ -59,7 +59,7 @@ describe('GoldPackToken', function () {
 
     // Step 4: Grant roles
     const SALES_ROLE = await gpt.SALES_ROLE();
-    await gpt.grantRole(SALES_ROLE, sales.getAddress());
+    await gpt.grantRole(SALES_ROLE, sales.address);
 
     // Step 5: Grant Admin role to token contract in vault
     const ADMIN_ROLE = await burnVault.ADMIN_ROLE();
@@ -76,8 +76,8 @@ describe('GoldPackToken', function () {
     const SALES_ROLE = await gpt.SALES_ROLE();
 
     expect(await gpt.hasRole(DEFAULT_ADMIN_ROLE, await superAdmin.getAddress())).to.be.true;
-    expect(await gpt.hasRole(ADMIN_ROLE, await admin.getAddress())).to.be.true;
-    expect(await gpt.hasRole(SALES_ROLE, await sales.getAddress())).to.be.true;
+    expect(await gpt.hasRole(ADMIN_ROLE, admin.address)).to.be.true;
+    expect(await gpt.hasRole(SALES_ROLE, sales.address)).to.be.true;
 
     // Verify token properties
     expect(await gpt.decimals()).to.equal(6);
@@ -114,7 +114,7 @@ describe('GoldPackToken', function () {
     await gpt.connect(user).approve(burnVaultProxy, amount);
     await gpt.connect(user).depositToBurnVault(amount);
 
-    expect(await burnVault.getBalance(user.getAddress())).to.equal(amount);
+    expect(await burnVault.getBalance(user.address)).to.equal(amount);
 
     // Wait burn delay
     const burnDelay = await burnVault.BURN_DELAY();
@@ -127,9 +127,9 @@ describe('GoldPackToken', function () {
     await ethers.provider.send('evm_mine', []);
 
     // Burn tokens
-    await gpt.connect(sales).RedeemCoins(user.getAddress(), amount);
+    await gpt.connect(sales).RedeemCoins(user.address, amount);
 
-    expect(await burnVault.getBalance(user.getAddress())).to.equal(0);
+    expect(await burnVault.getBalance(user.address)).to.equal(0);
   });
 
   it('Should fail minting when paused', async function () {
@@ -162,7 +162,7 @@ describe('GoldPackToken', function () {
     const amount = await gpt.TOKENS_PER_TROY_OUNCE();
 
     // Mint tokens to the user
-    await gpt.connect(sales).mint(user.getAddress(), amount);
+    await gpt.connect(sales).mint(user.address, amount);
 
     // Retrieve burn delay from BurnVault contract
     const burnDelay = await burnVault.BURN_DELAY();
@@ -173,21 +173,79 @@ describe('GoldPackToken', function () {
     // Approve the BurnVault to spend tokens on behalf of the user
     await gpt.connect(user).approve(burnVaultProxy, amount);
 
-    const allowance = await gpt.allowance(user.getAddress(), burnVaultProxy);
+    const allowance = await gpt.allowance(user.address, burnVaultProxy);
     expect(allowance).to.equal(amount);
 
     // Deposit tokens to the BurnVault
     await gpt.connect(user).depositToBurnVault(amount);
 
     // Attempt to burn tokens before the delay period has passed
-    await expect(
-      gpt.connect(sales).RedeemAllCoins(user.getAddress()),
-    ).to.be.revertedWithCustomError(burnVault, 'TooEarlyToBurn');
+    await expect(gpt.connect(sales).RedeemAllCoins(user.address)).to.be.revertedWithCustomError(
+      burnVault,
+      'TooEarlyToBurn',
+    );
   });
 
   it('Should fail when unauthorized user tries to burn from vault', async function () {
-    await expect(gpt.connect(user).RedeemAllCoins(user.getAddress()))
+    await expect(gpt.connect(user).RedeemAllCoins(user.address))
       .to.be.revertedWithCustomError(gpt, 'SalesRoleNotGranted')
-      .withArgs(user.getAddress());
+      .withArgs(user.address);
+  });
+
+  describe('Core ERC20 Functionality', () => {
+    it('should have correct name and symbol', async () => {
+      expect(await gpt.name()).to.equal('GoldPack Token');
+      expect(await gpt.symbol()).to.equal('GPT');
+    });
+
+    it('should have correct decimals', async () => {
+      expect(await gpt.decimals()).to.equal(6);
+    });
+  });
+
+  describe('Role Management', () => {
+    it('should check role assignments correctly', async () => {
+      expect(await gpt.isAdmin(admin.address)).to.be.true;
+      expect(await gpt.isSales(sales.address)).to.be.true;
+      expect(await gpt.isAdmin(user.address)).to.be.false;
+      expect(await gpt.isSales(user.address)).to.be.false;
+    });
+
+    it('should emit events when roles are granted', async () => {
+      const newSales = await ethers.provider.getSigner(10);
+      await expect(gpt.connect(superAdmin).grantRole(await gpt.SALES_ROLE(), newSales.address))
+        .to.emit(gpt, 'RoleGranted')
+        .withArgs(await gpt.SALES_ROLE(), newSales.address, superAdmin.address);
+    });
+  });
+
+  describe('UUPS Upgradeability', () => {
+    it('should only allow DEFAULT_ADMIN_ROLE to upgrade', async () => {
+      const GoldPackTokenV2 = await ethers.getContractFactory('GoldPackToken');
+      await expect(upgrades.upgradeProxy(await gpt.getAddress(), GoldPackTokenV2.connect(user)))
+        .to.be.revertedWithCustomError(gpt, 'DefaultAdminRoleNotGranted')
+        .withArgs(user.address);
+    });
+  });
+
+  describe('Constants', () => {
+    it('should have correct constant values', async () => {
+      expect(await gpt.TOKENS_PER_TROY_OUNCE()).to.equal(ethers.parseUnits('1', 4));
+      expect(await gpt.BURN_DELAY()).to.equal(7 * 24 * 60 * 60); // 7 days
+    });
+  });
+
+  describe('BurnVault Integration', () => {
+    it('should not allow setting zero address as burn vault', async () => {
+      await expect(gpt.connect(superAdmin).setBurnVault(ethers.ZeroAddress)).to.be.revertedWith(
+        'GoldPackToken: burn vault cannot be the zero address',
+      );
+    });
+
+    it('should only allow DEFAULT_ADMIN_ROLE to set burn vault', async () => {
+      await expect(gpt.connect(user).setBurnVault(burnVaultProxy))
+        .to.be.revertedWithCustomError(gpt, 'DefaultAdminRoleNotGranted')
+        .withArgs(user.address);
+    });
   });
 });

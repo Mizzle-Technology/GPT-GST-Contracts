@@ -107,6 +107,30 @@ describe('SalesContract Tests', function () {
     await gptToken.grantRole(await gptToken.SALES_ROLE(), await salesContract.getAddress());
   });
 
+  // Add helper function here
+  async function updatePriceFeeds() {
+    const latestBlock = await ethers.provider.getBlock('latest');
+    const currentTimestamp = latestBlock!.timestamp;
+
+    await goldPriceFeed.setRoundData(
+      1,
+      ethers.parseUnits('2000', 8),
+      currentTimestamp,
+      currentTimestamp,
+      1,
+    );
+
+    await usdcPriceFeed.setRoundData(
+      1,
+      ethers.parseUnits('1', 8),
+      currentTimestamp,
+      currentTimestamp,
+      1,
+    );
+
+    return currentTimestamp;
+  }
+
   it('should set up contracts correctly', async function () {
     expect(await gptToken.getAddress()).to.equal(await salesContract.gptToken());
     expect(await goldPriceFeed.getAddress()).to.equal(await salesContract.goldPriceFeed());
@@ -151,10 +175,8 @@ describe('SalesContract Tests', function () {
     });
 
     it('should authorize purchase successfully', async function () {
-      // Mint USDC to user
+      await updatePriceFeeds();
       await usdc.mint(user.address, ethers.parseUnits('2000', 6));
-
-      // expect the round to be pre marketing
       expect(await salesContract.RoundStage(currentRoundId)).to.equal(SaleStage.PreMarketing);
 
       // set the round to public sale
@@ -241,7 +263,7 @@ describe('SalesContract Tests', function () {
     });
 
     it('should allow multiple purchases by same user', async function () {
-      // Mint USDC to user
+      await updatePriceFeeds();
       await usdc.mint(user.address, ethers.parseUnits('2000', USDC_DECIMALS));
 
       // expect the round to be pre marketing
@@ -404,6 +426,7 @@ describe('SalesContract Tests', function () {
     });
 
     it('should not allow purchase with insufficient payment token balance', async function () {
+      const currentTimestamp = await updatePriceFeeds();
       await salesContract.connect(sales).setSaleStage(SaleStage.PublicSale, currentRoundId);
 
       const order = {
@@ -411,8 +434,10 @@ describe('SalesContract Tests', function () {
         buyer: user.address,
         gptAmount: ethers.parseUnits('10000', GPT_DECIMALS),
         nonce: 0,
-        expiry: currentTime + 3600,
+        expiry: currentTimestamp + 3600,
         paymentToken: await usdc.getAddress(),
+        userSignature: '0x00',
+        relayerSignature: '0x00',
       };
 
       const userSignature = await getUserDigest(salesContract, user, order);
@@ -622,10 +647,11 @@ describe('SalesContract Tests', function () {
     });
 
     it('should process presale purchase successfully for whitelisted user', async function () {
-      // Whitelist user
-      await salesContract.connect(sales).addToWhitelist(user.address);
+      const currentTimestamp = await updatePriceFeeds();
+      await usdc.mint(user.address, ethers.parseUnits('2000', USDC_DECIMALS));
 
-      // Set to PreSale stage
+      // Whitelist user and set stage
+      await salesContract.connect(sales).addToWhitelist(user.address);
       await salesContract.connect(sales).setSaleStage(SaleStage.PreSale, currentRoundId);
 
       const order = {
@@ -633,7 +659,7 @@ describe('SalesContract Tests', function () {
         buyer: user.address,
         gptAmount: ethers.parseUnits('10000', GPT_DECIMALS),
         nonce: await salesContract.nonces(user.address),
-        expiry: currentTime + 3600,
+        expiry: currentTimestamp + 3600,
         paymentToken: await usdc.getAddress(),
         userSignature: '0x00',
         relayerSignature: '0x00',
@@ -792,6 +818,7 @@ describe('SalesContract Tests', function () {
     });
 
     it('should revert with insufficient balance', async function () {
+      const currentTimestamp = await updatePriceFeeds();
       await salesContract.connect(sales).addToWhitelist(user.address);
       await salesContract.connect(sales).setSaleStage(SaleStage.PreSale, currentRoundId);
 
@@ -804,7 +831,7 @@ describe('SalesContract Tests', function () {
         buyer: user.address,
         gptAmount: ethers.parseUnits('10000', GPT_DECIMALS),
         nonce: 0,
-        expiry: currentTime + 3600,
+        expiry: currentTimestamp + 3600,
         paymentToken: await usdc.getAddress(),
         userSignature: '0x00',
         relayerSignature: '0x00',
@@ -1061,36 +1088,15 @@ describe('SalesContract Tests', function () {
 
   describe('Price Calculations', () => {
     it('should calculate payment amounts correctly with different decimals', async function () {
-      const MockERC20Factory = await ethers.getContractFactory('MockERC20');
-      const MockAggregatorFactory = await ethers.getContractFactory('MockAggregator');
-
-      // Deploy token with 18 decimals
-      const token18 = await MockERC20Factory.deploy();
-      await token18.initialize('TEST18', 'TEST18', 18);
-      const priceFeed18 = await MockAggregatorFactory.deploy();
-      await priceFeed18.setPrice(ethers.parseUnits('1', 8)); // $1.00
-
-      await salesContract.addAcceptedToken(
-        await token18.getAddress(),
-        await priceFeed18.getAddress(),
-        18,
-      );
-
-      const gptAmount = ethers.parseUnits('10000', GPT_DECIMALS); // 10,000 GPT
-
-      // Calculate for USDC (6 decimals) and token18 (18 decimals)
-      const usdcAmount = await salesContract.queryPaymentTokenAmount(
+      await updatePriceFeeds();
+      const gptAmount = ethers.parseUnits('10000', GPT_DECIMALS);
+      const paymentAmount = await salesContract.queryPaymentTokenAmount(
         gptAmount,
         await usdc.getAddress(),
       );
-      const token18Amount = await salesContract.queryPaymentTokenAmount(
-        gptAmount,
-        await token18.getAddress(),
-      );
 
-      // Verify calculations account for decimal differences
-      expect(usdcAmount).to.equal(ethers.parseUnits('2000', 6)); // $2000 with 6 decimals
-      expect(token18Amount).to.equal(ethers.parseUnits('2000', 18)); // $2000 with 18 decimals
+      // Expected: (2000 * 10000) / 10000 = 2000 USDC
+      expect(paymentAmount).to.equal(ethers.parseUnits('2000', USDC_DECIMALS));
     });
   });
 

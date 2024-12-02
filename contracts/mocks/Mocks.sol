@@ -30,6 +30,10 @@ contract MockERC20 is ERC20BurnableUpgradeable {
 contract MockAggregator {
   int256 private _price;
   uint8 private constant _decimals = 8;
+  uint256 private _timestamp;
+  uint80 private _roundId;
+  uint256 private _startedAt;
+  uint80 private _answeredInRound;
 
   constructor() {
     _price = 0;
@@ -37,6 +41,25 @@ contract MockAggregator {
 
   function setPrice(int256 price) external {
     _price = price;
+  }
+
+  function setLatestRoundData(int256 price, uint256 timestamp) external {
+    _price = price;
+    _timestamp = timestamp;
+  }
+
+  function setRoundData(
+    uint80 roundId,
+    int256 price,
+    uint256 startedAt,
+    uint256 updatedAt,
+    uint80 answeredInRound
+  ) external {
+    _roundId = roundId;
+    _price = price;
+    _startedAt = startedAt;
+    _timestamp = updatedAt;
+    _answeredInRound = answeredInRound;
   }
 
   // Function to get the latest answer
@@ -55,13 +78,26 @@ contract MockAggregator {
       uint80 answeredInRound
     )
   {
-    return (
-      1, // roundId
-      _price, // price with 8 decimals
-      block.timestamp,
-      block.timestamp,
-      1
-    );
+    return (_roundId, _price, _startedAt, _timestamp, _answeredInRound);
+  }
+
+  function getRoundData(
+    uint80
+  )
+    external
+    returns (
+      uint80 roundId,
+      int256 answer,
+      uint256 startedAt,
+      uint256 updatedAt,
+      uint80 answeredInRound
+    )
+  {
+    _roundId = roundId;
+    _startedAt = startedAt;
+    _timestamp = updatedAt;
+    _answeredInRound = answeredInRound;
+    return (_roundId, _price, _startedAt, _timestamp, _answeredInRound);
   }
 
   function decimals() external pure returns (uint8) {
