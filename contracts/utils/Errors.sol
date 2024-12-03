@@ -12,10 +12,14 @@ library Errors {
   error EmptyList();
   error InvalidTokenPrice();
   error TokenPriceStale();
+
   // AccessControl errors
   error DefaultAdminRoleNotGranted(address account);
   error AdminRoleNotGranted(address account);
   error SalesRoleNotGranted(address account);
+
+  // GoldPackToken errors
+  error CannotWithdrawGptTokens();
 
   // BurnVault errors
   error TooEarlyToBurn();
@@ -50,6 +54,8 @@ library Errors {
   error ExceedMaxAllocation(uint256 amount, uint256 maxTokens);
   error CannotRecoverGptToken();
   error AddressNotWhitelisted(address addr);
+  error BurnVaultAlreadySet(address burnVault);
+
   // RewardDistribution errors
   error SharesMustBeGreaterThanZero();
   error TotalSharesExceedMaximum();

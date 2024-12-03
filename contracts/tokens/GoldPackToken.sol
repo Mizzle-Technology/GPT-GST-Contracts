@@ -62,6 +62,10 @@ contract GoldPackToken is
    * - _super, _admin, and _sales_manager cannot be the zero address
    */
   function initialize(address _super, address _admin, address _sales_manager) public initializer {
+    if (_super == address(0) || _admin == address(0) || _sales_manager == address(0)) {
+      revert Errors.AddressCannotBeZero();
+    }
+
     __ERC20_init('GoldPack Token', 'GPT');
     __ERC20Burnable_init();
     __AccessControl_init();
@@ -69,7 +73,6 @@ contract GoldPackToken is
     __ERC20Permit_init('Gold Pack Token');
     __Pausable_init();
     __UUPSUpgradeable_init();
-    __Pausable_init();
     __Ownable_init(_super);
 
     _grantRole(DEFAULT_ADMIN_ROLE, _super);
@@ -116,7 +119,10 @@ contract GoldPackToken is
    * Requirements:
    * - Only callable by owner
    */
-  function mint(address to, uint256 amount) external override whenNotPaused onlySalesRole {
+  function mint(
+    address to,
+    uint256 amount
+  ) external override nonReentrant whenNotPaused onlySalesRole {
     _mint(to, amount);
     emit Mint(to, amount);
   }
@@ -124,7 +130,12 @@ contract GoldPackToken is
   // == Burn Vault Functions ==
 
   function setBurnVault(address _burnVault) external whenNotPaused onlyDefaultAdminRole {
-    require(_burnVault != address(0), 'GoldPackToken: burn vault cannot be the zero address');
+    if (_burnVault == address(0)) {
+      revert Errors.AddressCannotBeZero();
+    }
+    if (address(burnVault) == _burnVault) {
+      revert Errors.BurnVaultAlreadySet(_burnVault);
+    }
     burnVault = BurnVault(_burnVault);
 
     emit BurnVaultSet(_burnVault);
@@ -155,7 +166,7 @@ contract GoldPackToken is
    * - Caller must have SALES_ROLE
    * - Account must have tokens in vault
    */
-  function RedeemAllCoins(
+  function redeemAllCoins(
     address _account
   ) external override nonReentrant whenNotPaused onlySalesRole {
     require(_account != address(0), 'GoldPackToken: account cannot be the zero address');
@@ -173,7 +184,7 @@ contract GoldPackToken is
    * - Amount must be a multiple of TOKENS_PER_TROY_OUNCE (10000)
    * - Amount must be greater than 0
    */
-  function RedeemCoins(
+  function redeemCoins(
     address _account,
     uint256 _amount
   ) external override nonReentrant whenNotPaused onlySalesRole {
@@ -235,4 +246,25 @@ contract GoldPackToken is
   function _authorizeUpgrade(
     address newImplementation
   ) internal view override onlyDefaultAdminRole {}
+
+  // Add role revocation functions
+  function revokeSalesRole(address _account) external onlyDefaultAdminRole {
+    revokeRole(SALES_ROLE, _account);
+  }
+
+  function revokeAdminRole(address _account) external onlyDefaultAdminRole {
+    revokeRole(ADMIN_ROLE, _account);
+  }
+
+  // Add emergency withdrawal function
+  function emergencyWithdraw(
+    address token,
+    address to,
+    uint256 amount
+  ) external onlyDefaultAdminRole whenPaused {
+    if (token == address(this)) {
+      revert Errors.CannotWithdrawGptTokens();
+    }
+    ERC20Upgradeable(token).transfer(to, amount);
+  }
 }

@@ -2,7 +2,7 @@
 
 import { expect } from 'chai';
 import { ethers, upgrades } from 'hardhat';
-import { GoldPackToken, BurnVault } from '../typechain-types';
+import { GoldPackToken, BurnVault, MockERC20 } from '../typechain-types';
 import { SignerWithAddress } from '@nomicfoundation/hardhat-ethers/signers';
 
 describe('GoldPackToken', function () {
@@ -15,6 +15,7 @@ describe('GoldPackToken', function () {
   let sales: SignerWithAddress;
   let user: SignerWithAddress;
   let burnVaultProxy: string;
+  let alice: SignerWithAddress;
   let gptproxy: string;
 
   // Pconst ONE_DAY_IN_SECONDS = 86400;
@@ -26,7 +27,7 @@ describe('GoldPackToken', function () {
   }
 
   beforeEach(async function () {
-    [superAdmin, admin, sales, user] = await ethers.getSigners();
+    [superAdmin, admin, sales, user, alice] = await ethers.getSigners();
 
     // Step 1: Deploy BurnVault using UUPS proxy
     const BurnVault_factory = await ethers.getContractFactory('BurnVault', superAdmin);
@@ -127,7 +128,7 @@ describe('GoldPackToken', function () {
     await ethers.provider.send('evm_mine', []);
 
     // Burn tokens
-    await gpt.connect(sales).RedeemCoins(user.address, amount);
+    await gpt.connect(sales).redeemCoins(user.address, amount);
 
     expect(await burnVault.getBalance(user.address)).to.equal(0);
   });
@@ -180,14 +181,14 @@ describe('GoldPackToken', function () {
     await gpt.connect(user).depositToBurnVault(amount);
 
     // Attempt to burn tokens before the delay period has passed
-    await expect(gpt.connect(sales).RedeemAllCoins(user.address)).to.be.revertedWithCustomError(
+    await expect(gpt.connect(sales).redeemAllCoins(user.address)).to.be.revertedWithCustomError(
       burnVault,
       'TooEarlyToBurn',
     );
   });
 
   it('Should fail when unauthorized user tries to burn from vault', async function () {
-    await expect(gpt.connect(user).RedeemAllCoins(user.address))
+    await expect(gpt.connect(user).redeemAllCoins(user.address))
       .to.be.revertedWithCustomError(gpt, 'SalesRoleNotGranted')
       .withArgs(user.address);
   });
@@ -237,15 +238,101 @@ describe('GoldPackToken', function () {
 
   describe('BurnVault Integration', () => {
     it('should not allow setting zero address as burn vault', async () => {
-      await expect(gpt.connect(superAdmin).setBurnVault(ethers.ZeroAddress)).to.be.revertedWith(
-        'GoldPackToken: burn vault cannot be the zero address',
-      );
+      await expect(
+        gpt.connect(superAdmin).setBurnVault(ethers.ZeroAddress),
+      ).to.be.revertedWithCustomError(gpt, 'AddressCannotBeZero');
     });
 
     it('should only allow DEFAULT_ADMIN_ROLE to set burn vault', async () => {
       await expect(gpt.connect(user).setBurnVault(burnVaultProxy))
         .to.be.revertedWithCustomError(gpt, 'DefaultAdminRoleNotGranted')
         .withArgs(user.address);
+    });
+  });
+
+  // ... existing imports and test setup ...
+
+  describe('Role Management and Emergency Functions', () => {
+    describe('revokeSalesRole', () => {
+      it('should allow DEFAULT_ADMIN to revoke sales role', async () => {
+        const SALES_ROLE = await gpt.SALES_ROLE();
+        await gpt.grantRole(SALES_ROLE, alice.address);
+        expect(await gpt.isSales(alice.address)).to.be.true;
+
+        await gpt.revokeSalesRole(alice.address);
+        expect(await gpt.isSales(alice.address)).to.be.false;
+      });
+
+      it('should revert if caller is not DEFAULT_ADMIN', async () => {
+        await expect(gpt.connect(user).revokeSalesRole(sales.address))
+          .to.be.revertedWithCustomError(gpt, 'DefaultAdminRoleNotGranted')
+          .withArgs(user.address);
+      });
+    });
+
+    describe('revokeAdminRole', () => {
+      it('should allow DEFAULT_ADMIN to revoke admin role', async () => {
+        const DEFAULT_ADMIN_ROLE = await gpt.DEFAULT_ADMIN_ROLE();
+        await gpt.grantRole(DEFAULT_ADMIN_ROLE, admin.address);
+        expect(await gpt.isAdmin(admin.address)).to.be.true;
+
+        await gpt.revokeAdminRole(admin.address);
+        expect(await gpt.isAdmin(admin.address)).to.be.false;
+      });
+
+      it('should revert if caller is not DEFAULT_ADMIN', async () => {
+        await expect(gpt.connect(user).revokeAdminRole(admin.address))
+          .to.be.revertedWithCustomError(gpt, 'DefaultAdminRoleNotGranted')
+          .withArgs(user.address);
+      });
+    });
+
+    describe('emergencyWithdraw', () => {
+      let mockToken: MockERC20;
+
+      beforeEach(async () => {
+        // Deploy a mock ERC20 token for testing emergency withdrawals
+        const MockERC20 = await ethers.getContractFactory('MockERC20');
+        mockToken = (await MockERC20.deploy()) as unknown as MockERC20;
+        await mockToken.initialize('Mock Token', 'MTK', 18);
+        await mockToken.mint(gptproxy, ethers.parseEther('1000'));
+      });
+
+      it('should allow DEFAULT_ADMIN to withdraw tokens when paused', async () => {
+        await gpt.connect(admin).pause();
+        const amount = ethers.parseEther('100');
+
+        const balanceBefore = await mockToken.balanceOf(alice.address);
+        await gpt
+          .connect(superAdmin)
+          .emergencyWithdraw(await mockToken.getAddress(), alice.address, amount);
+        const balanceAfter = await mockToken.balanceOf(alice.address);
+
+        expect(balanceAfter - balanceBefore).to.equal(amount);
+      });
+
+      it('should revert if contract is not paused', async () => {
+        // Can't withdraw if not paused (emergency only)
+        await expect(
+          gpt.emergencyWithdraw(await mockToken.getAddress(), user.address, 100),
+        ).to.be.revertedWithCustomError(gpt, 'ExpectedPause');
+      });
+
+      it('should revert if trying to withdraw GPT tokens', async () => {
+        await gpt.connect(admin).pause();
+        await expect(
+          gpt.connect(superAdmin).emergencyWithdraw(gptproxy, alice.address, 100),
+        ).to.be.revertedWithCustomError(gpt, 'CannotWithdrawGptTokens');
+      });
+
+      it('should revert if caller is not DEFAULT_ADMIN', async () => {
+        await gpt.connect(admin).pause();
+        await expect(
+          gpt.connect(user).emergencyWithdraw(await mockToken.getAddress(), alice.address, 100),
+        )
+          .to.be.revertedWithCustomError(gpt, 'DefaultAdminRoleNotGranted')
+          .withArgs(user.address);
+      });
     });
   });
 });
