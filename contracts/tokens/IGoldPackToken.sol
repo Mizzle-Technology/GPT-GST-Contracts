@@ -9,9 +9,6 @@ pragma solidity 0.8.28;
 interface IGoldPackToken {
   // Events for token minting and burning
   event Mint(address indexed to, uint256 amount);
-  event BurnVaultSet(address indexed burnVault);
-  event TokensBurned(address indexed account, uint256 amount);
-  event TokensDeposited(address indexed account, uint256 amount);
 
   // Events for role management
   event AdminRoleGranted(address indexed account);
@@ -21,8 +18,4 @@ interface IGoldPackToken {
 
   // Functions declarations
   function mint(address to, uint256 amount) external;
-  function depositToBurnVault(uint256 amount) external;
-  function redeemAllCoins(address account) external;
-  function redeemCoins(address _account, uint256 _amount) external;
-  function getBurnVaultAddress() external view returns (address);
 }

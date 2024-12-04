@@ -156,7 +156,7 @@ contract SalesContract is
     address token,
     address priceFeed,
     uint8 decimals
-  ) external override onlyDefaultAdmin {
+  ) external override onlyAdmin {
     if (acceptedTokens[token].isAccepted) {
       revert Errors.TokenAlreadyAccepted(token);
     }
@@ -176,7 +176,7 @@ contract SalesContract is
    * @notice Removes an accepted payment token
    * @param token Address of the token to remove
    */
-  function removeAcceptedToken(address token) external onlyDefaultAdmin {
+  function removeAcceptedToken(address token) external onlyAdmin {
     require(acceptedTokens[token].isAccepted, 'Token not accepted');
     delete acceptedTokens[token];
   }
@@ -420,12 +420,25 @@ contract SalesContract is
   }
 
   // === Emergency Functions ===
-  function pause() public override onlyAdmin {
+  /**
+   * @notice Emergency function to pause all contract operations
+   * @dev Only callable by admin
+   * @dev Emits a Paused event
+   * Requirements:
+   * - Caller must have admin role
+   * - Contract must not already be paused
+   */
+  function pause() public override onlyDefaultAdmin {
     _pause();
     emit Paused(msg.sender, block.timestamp);
   }
 
-  function unpause() public override onlyAdmin {
+  /**
+   * @notice Emergency function to unpause all contract operations
+   * @dev Only callable by admin
+   * @dev Emits a Unpaused event
+   */
+  function unpause() public override onlyDefaultAdmin {
     _unpause();
     emit Unpaused(msg.sender, block.timestamp);
   }
@@ -440,7 +453,7 @@ contract SalesContract is
    * - Cannot recover GPT token
    * - Amount must be <= balance
    */
-  function recoverERC20(address token, uint256 amount) external override onlyAdmin {
+  function recoverERC20(address token, uint256 amount) external override onlyDefaultAdmin {
     if (token == address(gptToken)) {
       revert Errors.CannotRecoverGptToken();
     }
@@ -495,7 +508,11 @@ contract SalesContract is
   }
 
   // === UUPS Upgrade ===
-  function _authorizeUpgrade(address newImplementation) internal override onlyAdmin {}
+  /**
+   * @notice Authorizes the upgrade to a new implementation
+   * @param newImplementation The address of the new implementation
+   */
+  function _authorizeUpgrade(address newImplementation) internal override onlyDefaultAdmin {}
 
   // === View Functions ===
   /**

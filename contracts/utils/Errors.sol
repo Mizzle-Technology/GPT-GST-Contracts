@@ -12,17 +12,22 @@ library Errors {
   error EmptyList();
   error InvalidTokenPrice();
   error TokenPriceStale();
+  error AmountCannotBeZero();
 
   // AccessControl errors
   error DefaultAdminRoleNotGranted(address account);
   error AdminRoleNotGranted(address account);
   error SalesRoleNotGranted(address account);
+  error AdminRoleAlreadyGranted(address account);
+  error SalesRoleAlreadyGranted(address account);
 
   // GoldPackToken errors
   error CannotWithdrawGptTokens();
 
   // BurnVault errors
   error TooEarlyToBurn();
+  error InvalidTroyOunceAmount(uint256 amount);
+  error NoTokensToBurn();
 
   // TradingVault errors
   error DuplicatedWithdrawalRequest(bytes32 requestId);

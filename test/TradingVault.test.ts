@@ -73,9 +73,6 @@ describe('TradingVault Upgrade Tests', function () {
     // bind the Burn vault with GPT token
     await burnVault.connect(admin).updateAcceptedTokens(await gptToken.getAddress());
 
-    // set burn vault address in token
-    await gptToken.connect(superAdmin).setBurnVault(await burnVault.getAddress());
-
     // Deploy the initial TradingVault proxy
     const TradingVaultFactory = await ethers.getContractFactory('TradingVault', deployer);
     tradingVault = (await upgrades.deployProxy(

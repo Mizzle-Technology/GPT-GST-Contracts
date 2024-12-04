@@ -10,11 +10,10 @@ import '@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol
 import '@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol';
 import '@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol';
 import '@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol';
-import '@openzeppelin/contracts-upgradeable/utils/introspection/ERC165Upgradeable.sol';
 
 // Local imports
-import '../vaults/BurnVault.sol';
 import './IGoldPackToken.sol';
+import '../utils/Errors.sol';
 
 /**
  * @title GoldPackToken
@@ -41,14 +40,8 @@ contract GoldPackToken is
   // Sales role for minting tokens
   bytes32 public constant SALES_ROLE = keccak256('SALES_ROLE');
 
-  BurnVault public burnVault;
-
   // Define the customer decimals for the token
   uint8 public constant DECIMALS = 6;
-
-  // 1 Troy ounce = 10000 GPT tokens
-  uint256 public constant TOKENS_PER_TROY_OUNCE = 10000;
-  uint256 public constant BURN_DELAY = 7 days;
 
   //private
   uint256[50] private __gap;
@@ -81,6 +74,10 @@ contract GoldPackToken is
     _setRoleAdmin(SALES_ROLE, DEFAULT_ADMIN_ROLE);
   }
 
+  /**
+   * @dev Returns the number of decimals used by the token
+   * @return The number of decimals
+   */
   function decimals() public pure override returns (uint8) {
     return DECIMALS;
   }
@@ -114,99 +111,30 @@ contract GoldPackToken is
 
   /**
    * @dev Mints tokens to the specified address.
-   * @param to The address to mint tokens to
-   * @param amount The amount of tokens to mint (1 GPT = 1/10000 Troy ounce)
+   * @param _to The address to mint tokens to
+   * @param _amount The amount of tokens to mint (1 GPT = 1/10000 Troy ounce)
    * Requirements:
    * - Only callable by owner
    */
   function mint(
-    address to,
-    uint256 amount
-  ) external override nonReentrant whenNotPaused onlySalesRole {
-    _mint(to, amount);
-    emit Mint(to, amount);
-  }
-
-  // == Burn Vault Functions ==
-
-  function setBurnVault(address _burnVault) external whenNotPaused onlyDefaultAdminRole {
-    if (_burnVault == address(0)) {
-      revert Errors.AddressCannotBeZero();
-    }
-    if (address(burnVault) == _burnVault) {
-      revert Errors.BurnVaultAlreadySet(_burnVault);
-    }
-    burnVault = BurnVault(_burnVault);
-
-    emit BurnVaultSet(_burnVault);
-  }
-
-  /**
-   * @dev Deposits tokens to the burn vault for delayed burning.
-   * @param amount The amount of tokens to deposit
-   * Requirements:
-   * - Amount must be a multiple of TOKENS_PER_TROY_OUNCE (10000)
-   * - Amount must be greater than 0
-   */
-  function depositToBurnVault(uint256 amount) external override nonReentrant whenNotPaused {
-    require(amount > 0, 'GoldPackToken: amount must be greater than 0');
-    require(
-      amount % TOKENS_PER_TROY_OUNCE == 0,
-      'GoldPackToken: amount must be a whole number of Troy ounces'
-    );
-
-    // Transfer tokens to burn vault
-    burnVault.depositTokens(msg.sender, amount, ERC20BurnableUpgradeable(address(this)));
-  }
-
-  /**
-   * @dev Burns All tokens from the burn vault.
-   * @param _account The account whose tokens to burn
-   * Requirements:
-   * - Caller must have SALES_ROLE
-   * - Account must have tokens in vault
-   */
-  function redeemAllCoins(
-    address _account
-  ) external override nonReentrant whenNotPaused onlySalesRole {
-    require(_account != address(0), 'GoldPackToken: account cannot be the zero address');
-    ERC20BurnableUpgradeable token = ERC20BurnableUpgradeable(address(this));
-    burnVault.burnAllTokens(_account, token);
-  }
-
-  /**
-   * @dev Burns a specified amount of tokens from the burn vault.
-   * @param _account The account whose tokens to burn
-   * @param _amount The amount of tokens to burn
-   * Requirements:
-   * - Caller must have SALES_ROLE
-   * - Account must have enough tokens in vault
-   * - Amount must be a multiple of TOKENS_PER_TROY_OUNCE (10000)
-   * - Amount must be greater than 0
-   */
-  function redeemCoins(
-    address _account,
+    address _to,
     uint256 _amount
   ) external override nonReentrant whenNotPaused onlySalesRole {
-    require(_amount > 0, 'GoldPackToken: amount must be greater than zero');
-    require(
-      _amount % TOKENS_PER_TROY_OUNCE == 0,
-      'GoldPackToken: amount must be a whole number of Troy ounces'
-    );
-    require(_account != address(0), 'GoldPackToken: account cannot be the zero address');
-
-    ERC20BurnableUpgradeable token = ERC20BurnableUpgradeable(address(this));
-    burnVault.burnTokens(_account, _amount, token);
+    if (_to == address(0)) {
+      revert Errors.AddressCannotBeZero();
+    }
+    if (_amount == 0) {
+      revert Errors.AmountCannotBeZero();
+    }
+    _mint(_to, _amount);
+    emit Mint(_to, _amount);
   }
 
   /**
-   * @dev Returns the address of the burn vault
-   * @return Address of the burn vault contract
+   * @dev Checks if an account has admin role
+   * @param account Address to check
+   * @return bool true if account has admin role
    */
-  function getBurnVaultAddress() public view override returns (address) {
-    return address(burnVault);
-  }
-
   function isAdmin(address account) public view returns (bool) {
     return hasRole(ADMIN_ROLE, account);
   }
@@ -234,29 +162,93 @@ contract GoldPackToken is
   }
 
   // === Pausable ===
+
+  /**
+   * @dev Pauses the contract
+   * @dev Only callable by admin
+   */
   function pause() external virtual whenNotPaused onlyAdminRole {
     _pause();
   }
 
+  /**
+   * @dev Unpauses the contract
+   * @dev Only callable by admin
+   */
   function unpause() external virtual whenPaused onlyAdminRole {
     _unpause();
   }
 
   // === UUPS Upgrade ===
+
+  /**
+   * @dev Authorizes the upgrade to a new implementation
+   * @dev Only callable by default admin
+   */
   function _authorizeUpgrade(
     address newImplementation
   ) internal view override onlyDefaultAdminRole {}
 
-  // Add role revocation functions
+  // === Role Management ===
+
+  /**
+   * @dev Grants the sales role to an account
+   * @dev Only callable by default admin
+   */
+  function grantSalesRole(address _account) external onlyDefaultAdminRole {
+    if (_account == address(0)) {
+      revert Errors.AddressCannotBeZero();
+    }
+    if (hasRole(SALES_ROLE, _account)) {
+      revert Errors.SalesRoleAlreadyGranted(_account);
+    }
+    grantRole(SALES_ROLE, _account);
+    emit SalesRoleGranted(_account);
+  }
+
+  /**
+   * @dev Grants the admin role to an account
+   * @dev Only callable by default admin
+   */
+  function grantAdminRole(address _account) external onlyDefaultAdminRole {
+    if (_account == address(0)) {
+      revert Errors.AddressCannotBeZero();
+    }
+    if (hasRole(ADMIN_ROLE, _account)) {
+      revert Errors.AdminRoleAlreadyGranted(_account);
+    }
+    grantRole(ADMIN_ROLE, _account);
+    emit AdminRoleGranted(_account);
+  }
+
+  /**
+   * @dev Revokes the sales role from an account
+   * @dev Only callable by default admin
+   */
   function revokeSalesRole(address _account) external onlyDefaultAdminRole {
+    if (_account == address(0)) {
+      revert Errors.AddressCannotBeZero();
+    }
     revokeRole(SALES_ROLE, _account);
+    emit SalesRoleRevoked(_account);
   }
 
+  /**
+   * @dev Revokes the admin role from an account
+   * @dev Only callable by default admin
+   */
   function revokeAdminRole(address _account) external onlyDefaultAdminRole {
+    if (_account == address(0)) {
+      revert Errors.AddressCannotBeZero();
+    }
     revokeRole(ADMIN_ROLE, _account);
+    emit AdminRoleRevoked(_account);
   }
 
-  // Add emergency withdrawal function
+  /**
+   * @dev Emergency withdrawal function
+   * @dev Only callable by default admin when paused
+   */
   function emergencyWithdraw(
     address token,
     address to,
@@ -264,6 +256,9 @@ contract GoldPackToken is
   ) external onlyDefaultAdminRole whenPaused {
     if (token == address(this)) {
       revert Errors.CannotWithdrawGptTokens();
+    }
+    if (to == address(0)) {
+      revert Errors.AddressCannotBeZero();
     }
     ERC20Upgradeable(token).transfer(to, amount);
   }
