@@ -1,18 +1,19 @@
 # Define variables
-FORGE = forge
+HARDHAT = npx hardhat
 CAST = cast
 DEPLOY_SCRIPT = script/Deploy.s.sol
 TEST_SCRIPT = test
+TEST_NAME ?=
 
 # Default target
-all: compile deploy test
+all: compile deploy test typechain
 
 # Compile contracts
 compile:
 	@echo "Compiling contracts..."
-	$(FORGE) clean
-	$(FORGE) build
-	$(FORGE) fmt
+	$(HARDHAT) clean && $(HARDHAT) compile
+	npm run format
+	npm run lint:fix
 
 # Deploy contracts
 deploy: compile
@@ -22,16 +23,17 @@ deploy: compile
 # Run tests
 test: compile
 	@echo "Running tests..."
-	$(FORGE) test -vvv
+	$(HARDHAT) test
 
-quick-test:
-	@echo "Running tests..."
-	$(FORGE) test -vvv
+# typechain
+typechain:
+	@echo "Generating typechain types..."
+	$(HARDHAT) typechain
 
 # Clean artifacts
 clean:
 	@echo "Cleaning artifacts..."
-	rm -rf out cache
+	rm -rf out cache artifacts typechain-types
 
 # Help
 help:

@@ -1,0 +1,52 @@
+{
+  "name": "gpt-gst-contracts",
+  "version": "1.0.0",
+  "description": "A set of smart contracts for managing the sale, minting, and burning of Gold Pack Tokens (GPT), including secure vaults and price calculation integration. This project leverages the Foundry framework for testing and deployment.",
+  "main": "index.js",
+  "directories": {
+    "lib": "lib",
+    "test": "test"
+  },
+  "scripts": {
+    "lint": "eslint '**/*.{js,ts}'",
+    "lint:fix": "eslint '**/*.{js,ts}' --fix",
+    "format": "prettier --write '**/*.{js,ts,sol,json,md}'",
+    "format:check": "prettier --check '**/*.{js,ts,sol,json,md}'",
+    "test": "npx hardhat test",
+    "compile": "npx hardhat compile"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@chainlink/test-helpers": "^0.0.7-alpha",
+    "@eslint/eslintrc": "^3.2.0",
+    "@eslint/js": "^9.15.0",
+    "@nomicfoundation/hardhat-ethers": "^3.0.8",
+    "@nomicfoundation/hardhat-network-helpers": "^1.0.12",
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@nomicfoundation/hardhat-toolbox-viem": "^3.0.0",
+    "@openzeppelin/hardhat-upgrades": "^3.5.0",
+    "@typechain/ethers-v6": "^0.5.1",
+    "@typechain/hardhat": "^9.1.0",
+    "@typescript-eslint/eslint-plugin": "^8.16.0",
+    "@typescript-eslint/parser": "^8.16.0",
+    "chai": "^4.3.7",
+    "eslint": "^9.15.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-mocha": "^10.5.0",
+    "eslint-plugin-prettier": "^5.2.1",
+    "ethers": "^6.13.4",
+    "hardhat": "^2.22.16",
+    "mocha": "^10.8.2",
+    "prettier": "^3.3.3",
+    "prettier-plugin-solidity": "^1.4.1",
+    "solidity-coverage": "^0.8.14",
+    "typechain": "^8.3.2"
+  },
+  "dependencies": {
+    "@chainlink/contracts": "^1.3.0",
+    "@openzeppelin/contracts-upgradeable": "^5.1.0",
+    "glob": "^9.3.5"
+  }
+}
