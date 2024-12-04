@@ -15,10 +15,7 @@ import {Errors} from '../utils/Errors.sol';
 
 /**
  * @title BurnVault
- * @dev The BurnVault contract allows users to burn tokens by sending them to this contract.
- * The tokens sent to this contract are effectively removed from circulation.
- * This contract does not provide any functionality to retrieve the tokens once they are sent.
- * It is designed to be a one-way vault for burning tokens.
+ * @notice This contract manages the burning of tokens after a specified delay.
  */
 contract BurnVault is
   Initializable,
@@ -32,22 +29,28 @@ contract BurnVault is
   using SafeERC20 for ERC20Upgradeable;
   using EnumerableSet for EnumerableSet.AddressSet;
 
+  /// @notice Role for administrative functions
   bytes32 public constant ADMIN_ROLE = keccak256('ADMIN_ROLE');
-  // 1 Troy ounce = 10000 GPT tokens
+  /// @notice 1 Troy ounce = 10000 GPT tokens
   uint256 public constant TOKENS_PER_TROY_OUNCE = 10000;
+  /// @notice The delay before tokens can be burned after a deposit
   uint256 public constant BURN_DELAY = 7 days;
 
-  // storage gap
+  /// @notice Storage gap for future upgrades
   uint256[50] private __gap;
 
+  /// @notice Struct to store deposit information
   struct Deposit {
+    /// @notice The amount of tokens deposited
     uint256 amount;
+    /// @notice The timestamp of the deposit
     uint256 timestamp;
   }
 
+  /// @notice Mapping of deposits by user address
   mapping(address => Deposit) public deposits;
 
-  // Accepted Tokens
+  /// @notice Accepted Tokens
   EnumerableSet.AddressSet private acceptedTokens;
 
   /**
@@ -277,10 +280,22 @@ contract BurnVault is
   }
 
   // === View Functions ===
+  /**
+   * @notice Checks if a token is accepted.
+   * @param _token The address of the token to check.
+   * @return True if the token is accepted, false otherwise.
+   */
   function isAcceptedToken(address _token) external view returns (bool) {
     return acceptedTokens.contains(_token);
   }
 
   // === UUPS Functions ===
+  /**
+   * @notice Authorizes the upgrade of the contract to a new implementation.
+   * @param newImplementation The address of the new implementation.
+   *
+   * Requirements:
+   * - Only the super admin can authorize the upgrade.
+   */
   function _authorizeUpgrade(address newImplementation) internal override onlySuperAdmin {}
 }

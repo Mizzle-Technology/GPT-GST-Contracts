@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
+/**
+ * @title Errors
+ * @notice This library contains error codes and messages for various conditions in the contracts.
+ */
 library Errors {
   // Generic errors
   error InsufficientBalance(uint256 balance, uint256 amount);
@@ -71,4 +75,6 @@ library Errors {
   error ShareholderNotActivated(address account);
   error ShareholderLocked(address account);
   error NoSharesAssigned(address account);
+  error RewardsAlreadyClaimed(address account);
+  error RewardsNotYetClaimable(bytes32 distributionId);
 }
