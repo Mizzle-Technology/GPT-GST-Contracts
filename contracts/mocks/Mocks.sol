@@ -14,7 +14,7 @@ import '../../contracts/rewards/RewardDistribution.sol';
  */
 contract MockERC20 is ERC20BurnableUpgradeable {
   /// @notice Decimals of the mock ERC20 token
-  uint8 private _decimals;
+  uint8 private DECIMALS;
 
   /// @notice Initializes the mock ERC20 token
   function initialize(
@@ -24,7 +24,7 @@ contract MockERC20 is ERC20BurnableUpgradeable {
   ) public initializer {
     __ERC20_init(name, symbol);
     __ERC20Burnable_init();
-    _decimals = decimals_;
+    DECIMALS = decimals_;
   }
 
   /// @notice Mints new tokens to an address
@@ -34,7 +34,7 @@ contract MockERC20 is ERC20BurnableUpgradeable {
 
   /// @notice Returns the decimals of the mock ERC20 token
   function decimals() public view override returns (uint8) {
-    return _decimals;
+    return DECIMALS;
   }
 }
 
@@ -121,6 +121,9 @@ contract TradingVaultV2 is TradingVault {
  * @dev Used for testing reentrancy
  */
 interface IReentrancyAttack {
+  /**
+   * @notice Reenters the contract to test reentrancy
+   */
   function reenter() external;
 }
 
