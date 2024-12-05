@@ -290,18 +290,16 @@ describe('RewardDistribution Tests', function () {
       ).to.be.revertedWithCustomError(rewardDistribution, 'RewardsNotLocked');
     });
 
-    it('should revert when non-admin tries to lock rewards', async () => {
+    it('should revert when non-admin tries to lock rewards', async function () {
       await expect(rewardDistribution.connect(nonAdmin).lockRewards(shareholder1.address))
-        .to.be.revertedWithCustomError(rewardDistribution, 'AccessControlUnauthorizedAccount')
-        .withArgs(nonAdmin.address, ADMIN_ROLE);
+        .to.be.revertedWithCustomError(rewardDistribution, 'AdminRoleNotGranted')
+        .withArgs(nonAdmin.address);
     });
 
-    it('should revert when non-admin tries to unlock rewards', async () => {
-      await rewardDistribution.connect(admin).lockRewards(shareholder1.address);
-
+    it('should revert when non-admin tries to unlock rewards', async function () {
       await expect(rewardDistribution.connect(nonAdmin).unlockRewards(shareholder1.address))
-        .to.be.revertedWithCustomError(rewardDistribution, 'AccessControlUnauthorizedAccount')
-        .withArgs(nonAdmin.address, ADMIN_ROLE);
+        .to.be.revertedWithCustomError(rewardDistribution, 'AdminRoleNotGranted')
+        .withArgs(nonAdmin.address);
     });
   });
   describe('Update Shareholder Shares', () => {
@@ -358,26 +356,27 @@ describe('RewardDistribution Tests', function () {
       expect(await rewardDistribution.isRewardToken(await rewardToken1.getAddress())).to.be.true;
     });
 
-    it('should revert when adding already supported token', async () => {
+    it('should revert when adding already supported token', async function () {
       await rewardDistribution.connect(admin).addRewardToken(await rewardToken1.getAddress());
-
       await expect(
         rewardDistribution.connect(admin).addRewardToken(await rewardToken1.getAddress()),
-      ).to.be.revertedWith('Token already supported');
+      )
+        .to.be.revertedWithCustomError(rewardDistribution, 'TokenAlreadyAccepted')
+        .withArgs(await rewardToken1.getAddress());
     });
 
-    it('should revert when adding zero address token', async () => {
+    it('should revert when adding zero address token', async function () {
       await expect(
         rewardDistribution.connect(admin).addRewardToken(ethers.ZeroAddress),
-      ).to.be.revertedWith('Invalid token address');
+      ).to.be.revertedWithCustomError(rewardDistribution, 'AddressCannotBeZero');
     });
 
-    it('should revert when non-admin adds token', async () => {
+    it('should revert when non-admin adds token', async function () {
       await expect(
         rewardDistribution.connect(nonAdmin).addRewardToken(await rewardToken1.getAddress()),
       )
-        .to.be.revertedWithCustomError(rewardDistribution, 'AccessControlUnauthorizedAccount')
-        .withArgs(nonAdmin.address, ADMIN_ROLE);
+        .to.be.revertedWithCustomError(rewardDistribution, 'AdminRoleNotGranted')
+        .withArgs(nonAdmin.address);
     });
 
     it('should remove reward token successfully', async () => {
@@ -411,7 +410,7 @@ describe('RewardDistribution Tests', function () {
 
       await expect(
         rewardDistribution.connect(admin).topUpRewards(0, await rewardToken1.getAddress()),
-      ).to.be.revertedWith('Amount must be greater than zero');
+      ).to.be.revertedWithCustomError(rewardDistribution, 'AmountCannotBeZero');
     });
 
     it('should revert when topping up unsupported token', async () => {
@@ -419,7 +418,9 @@ describe('RewardDistribution Tests', function () {
         rewardDistribution
           .connect(admin)
           .topUpRewards(ethers.parseUnits('100', 18), await rewardToken1.getAddress()),
-      ).to.be.revertedWith('Token not supported');
+      )
+        .to.be.revertedWithCustomError(rewardDistribution, 'TokenNotAccepted')
+        .withArgs(await rewardToken1.getAddress());
     });
 
     it('should revert when contract is paused', async () => {
@@ -443,8 +444,8 @@ describe('RewardDistribution Tests', function () {
           .connect(nonAdmin)
           .topUpRewards(ethers.parseUnits('100', 18), await rewardToken1.getAddress()),
       )
-        .to.be.revertedWithCustomError(rewardDistribution, 'AccessControlUnauthorizedAccount')
-        .withArgs(nonAdmin.address, ADMIN_ROLE);
+        .to.be.revertedWithCustomError(rewardDistribution, 'AdminRoleNotGranted')
+        .withArgs(nonAdmin.address);
     });
   });
 
@@ -518,7 +519,7 @@ describe('RewardDistribution Tests', function () {
       // Attempt to claim before distribution time
       await expect(
         rewardDistribution.connect(shareholder1).claimReward(distributionId),
-      ).to.be.revertedWith('Rewards not yet claimable');
+      ).to.be.revertedWithCustomError(rewardDistribution, 'RewardsNotYetClaimable');
     });
 
     it('should revert when claiming already claimed rewards', async () => {
@@ -529,7 +530,7 @@ describe('RewardDistribution Tests', function () {
       // Attempt to claim again
       await expect(
         rewardDistribution.connect(shareholder1).claimReward(distributionId),
-      ).to.be.revertedWith('Rewards already claimed for this distribution');
+      ).to.be.revertedWithCustomError(rewardDistribution, 'RewardsAlreadyClaimed');
     });
 
     it('should revert when claiming with locked rewards', async () => {
@@ -617,7 +618,7 @@ describe('RewardDistribution Tests', function () {
         rewardDistribution
           .connect(admin)
           .createDistribution(await rewardToken1.getAddress(), 0, (await time.latest()) + 100),
-      ).to.be.revertedWith('Invalid reward amount');
+      ).to.be.revertedWithCustomError(rewardDistribution, 'AmountCannotBeZero');
     });
 
     it('should revert with past distribution time', async () => {
@@ -632,7 +633,7 @@ describe('RewardDistribution Tests', function () {
             ethers.parseUnits('500', 18),
             (await time.latest()) - 10,
           ),
-      ).to.be.revertedWith('Distribution time must be in the future');
+      ).to.be.revertedWithCustomError(rewardDistribution, 'InvalidTimeRange');
     });
 
     it('should revert with insufficient funds', async () => {
@@ -647,7 +648,9 @@ describe('RewardDistribution Tests', function () {
             ethers.parseUnits('1000', 18),
             (await time.latest()) + 100,
           ),
-      ).to.be.revertedWith('Insufficient funds');
+      )
+        .to.be.revertedWithCustomError(rewardDistribution, 'InsufficientBalance')
+        .withArgs(ethers.parseUnits('500', 18), ethers.parseUnits('1000', 18));
     });
 
     it('should revert when paused', async () => {
@@ -676,8 +679,8 @@ describe('RewardDistribution Tests', function () {
             (await time.latest()) + 100,
           ),
       )
-        .to.be.revertedWithCustomError(rewardDistribution, 'AccessControlUnauthorizedAccount')
-        .withArgs(nonAdmin.address, ADMIN_ROLE);
+        .to.be.revertedWithCustomError(rewardDistribution, 'AdminRoleNotGranted')
+        .withArgs(nonAdmin.address);
     });
   });
 
@@ -692,8 +695,8 @@ describe('RewardDistribution Tests', function () {
 
     it('should revert when non-default-admin tries to pause', async () => {
       await expect(rewardDistribution.connect(admin).pause())
-        .to.be.revertedWithCustomError(rewardDistribution, 'AccessControlUnauthorizedAccount')
-        .withArgs(admin.address, DEFAULT_ADMIN_ROLE);
+        .to.be.revertedWithCustomError(rewardDistribution, 'DefaultAdminRoleNotGranted')
+        .withArgs(admin.address);
     });
 
     it('should unpause successfully', async () => {
@@ -714,8 +717,8 @@ describe('RewardDistribution Tests', function () {
 
       // Attempt to unpause by non-default-admin
       await expect(rewardDistribution.connect(admin).unpause())
-        .to.be.revertedWithCustomError(rewardDistribution, 'AccessControlUnauthorizedAccount')
-        .withArgs(admin.address, DEFAULT_ADMIN_ROLE);
+        .to.be.revertedWithCustomError(rewardDistribution, 'DefaultAdminRoleNotGranted')
+        .withArgs(admin.address);
     });
   });
   describe('Upgradeability', () => {
@@ -742,8 +745,8 @@ describe('RewardDistribution Tests', function () {
           RewardDistributionV2Factory.connect(nonAdmin),
         ),
       )
-        .to.be.revertedWithCustomError(rewardDistribution, 'AccessControlUnauthorizedAccount')
-        .withArgs(nonAdmin.address, DEFAULT_ADMIN_ROLE);
+        .to.be.revertedWithCustomError(rewardDistribution, 'DefaultAdminRoleNotGranted')
+        .withArgs(nonAdmin.address);
     });
   });
 });
