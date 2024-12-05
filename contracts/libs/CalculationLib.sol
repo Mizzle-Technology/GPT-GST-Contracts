@@ -34,7 +34,6 @@ import '../utils/Errors.sol';
  * );
  * ```
  */
-
 library CalculationLib {
   /// @notice Maximum allowed age of price data (1 hour)
   uint256 public constant MAX_PRICE_AGE = 1 hours;
@@ -55,10 +54,10 @@ library CalculationLib {
     uint8 tokenDecimals,
     uint256 tokensPerTroyOunce
   ) internal pure returns (uint256 tokenAmount) {
-    require(goldPrice > 0, 'Invalid gold price');
-    require(tokenPrice > 0, 'Invalid token price');
-    require(tokensPerTroyOunce > 0, 'Tokens per troy ounce must be greater than zero');
-    require(gptAmount > 0, 'GPT amount must be greater than zero');
+    if (goldPrice <= 0) revert Errors.InvalidGoldPrice();
+    if (tokenPrice <= 0) revert Errors.InvalidTokenPrice();
+    if (tokensPerTroyOunce == 0) revert Errors.InvalidTroyOunceAmount(tokensPerTroyOunce);
+    if (gptAmount == 0) revert Errors.AmountCannotBeZero();
 
     uint256 goldPriceUint = uint256(goldPrice); // 8 decimals
     uint256 tokenPriceUint = uint256(tokenPrice); // 8 decimals
@@ -121,8 +120,8 @@ library CalculationLib {
     uint8 tokenDecimals,
     uint256 tokensPerTroyOunce
   ) internal pure returns (uint256 gptAmount) {
-    require(goldPrice > 0, 'Invalid gold price');
-    require(tokenPrice > 0, 'Invalid token price');
+    if (goldPrice <= 0) revert Errors.InvalidGoldPrice();
+    if (tokenPrice <= 0) revert Errors.InvalidTokenPrice();
 
     // Convert tokenPrice and goldPrice from int256 to uint256 after ensuring they are positive
     uint256 _tokenPrice = uint256(tokenPrice);

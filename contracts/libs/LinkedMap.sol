@@ -37,8 +37,8 @@ library LinkedMap {
    * @return success True if the operation was successful.
    */
   function add(LinkedList storage self, bytes32 key) internal returns (bool) {
-    require(key != bytes32(0), 'Zero key not allowed');
-    require(!self.nodes[key].exists, 'Key already exists');
+    if (key == bytes32(0)) revert Errors.AddressCannotBeZero();
+    if (self.nodes[key].exists) revert Errors.KeyAlreadyExists(key);
 
     Node memory newNode = Node({prev: self.tail, next: bytes32(0), exists: true});
 
@@ -65,8 +65,8 @@ library LinkedMap {
    * @return success True if the operation was successful.
    */
   function remove(LinkedList storage self, bytes32 key) internal returns (bool) {
-    require(key != bytes32(0), 'Zero key not allowed');
-    require(self.nodes[key].exists, 'Key does not exist');
+    if (key == bytes32(0)) revert Errors.AddressCannotBeZero();
+    if (!self.nodes[key].exists) revert Errors.KeyDoesNotExist(key);
 
     Node storage node = self.nodes[key];
 

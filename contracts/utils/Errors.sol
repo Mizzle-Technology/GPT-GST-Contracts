@@ -78,6 +78,18 @@ library Errors {
   error SafeWalletNotSet();
   /// @notice Amount exceeds threshold error
   error AmountExceedsThreshold(uint256 amount, uint256 threshold);
+  /// @notice Vault paused error
+  error VaultPaused();
+  /// @notice No active round error
+  error NoActiveRound();
+  /// @notice Round ended error
+  error RoundEnded();
+  /// @notice Exceeds round limit error
+  error ExceedsRoundLimit();
+  /// @notice Same threshold error
+  error SameThreshold();
+  /// @notice Same wallet address error
+  error SameWalletAddress();
 
   // SalesContract errors
   /// @notice Invalid user signature error
@@ -120,6 +132,8 @@ library Errors {
   error AddressNotWhitelisted(address addr);
   /// @notice Burn vault already set error
   error BurnVaultAlreadySet(address burnVault);
+  /// @notice Invalid gold price error
+  error InvalidGoldPrice();
 
   // RewardDistribution errors
   /// @notice Shares must be greater than zero error
@@ -144,4 +158,10 @@ library Errors {
   error RewardsAlreadyClaimed(address account);
   /// @notice Rewards not yet claimable error
   error RewardsNotYetClaimable(bytes32 distributionId);
+
+  // LinkedMap errors
+  /// @notice Key already exists error
+  error KeyAlreadyExists(bytes32 key);
+  /// @notice Key does not exist error
+  error KeyDoesNotExist(bytes32 key);
 }

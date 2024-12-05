@@ -106,11 +106,11 @@ library SalesLib {
     address buyer,
     uint256 tokensPerTroyOunce
   ) internal returns (uint256 tokenAmount) {
-    require(!tradingVault.paused(), 'Vault is paused');
-    require(round.isActive, 'No active round');
-    require(block.timestamp <= round.endTime, 'Round ended');
-    require(round.tokensSold + amount <= round.maxTokens, 'Exceeds round limit');
-    require(tokenConfig.isAccepted, 'Token not accepted');
+    if (tradingVault.paused()) revert Errors.VaultPaused();
+    if (!round.isActive) revert Errors.NoActiveRound();
+    if (block.timestamp > round.endTime) revert Errors.RoundEnded();
+    if (round.tokensSold + amount > round.maxTokens) revert Errors.ExceedsRoundLimit();
+    if (!tokenConfig.isAccepted) revert Errors.TokenNotAccepted(paymentToken);
 
     (int256 goldPrice, ) = CalculationLib.getLatestPrice(goldPriceFeed);
     (int256 tokenPrice, ) = CalculationLib.getLatestPrice(tokenConfig.priceFeed);
@@ -131,7 +131,7 @@ library SalesLib {
 
     // Transfer tokens to the vault
     uint256 allowance = ERC20Upgradeable(paymentToken).allowance(buyer, address(this));
-    require(allowance >= tokenAmount, 'Token allowance too low');
+    if (allowance < tokenAmount) revert Errors.InsufficientAllowance(allowance, tokenAmount);
 
     ERC20Upgradeable(paymentToken).safeTransferFrom(buyer, address(tradingVault), tokenAmount);
     round.tokensSold += amount;

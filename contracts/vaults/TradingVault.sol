@@ -74,6 +74,9 @@ contract TradingVault is
    * @param _super Address of the super admin
    */
   function initialize(address _safeWallet, address _admin, address _super) public initializer {
+    if (_super == address(0) || _admin == address(0) || _safeWallet == address(0)) {
+      revert Errors.AddressCannotBeZero();
+    }
     __AccessControl_init();
     __ReentrancyGuard_init();
     __Pausable_init();
@@ -83,7 +86,6 @@ contract TradingVault is
     _grantRole(ADMIN_ROLE, _admin);
     _setRoleAdmin(ADMIN_ROLE, DEFAULT_ADMIN_ROLE);
 
-    require(_safeWallet != address(0), 'Invalid wallet address');
     safeWallet = _safeWallet;
     WITHDRAWAL_THRESHOLD = 100000 * 10 ** 6; // 100k USDC
   }
@@ -302,8 +304,12 @@ contract TradingVault is
    * @return success A boolean value indicating whether the wallet address was successfully updated.
    */
   function setWithdrawalWallet(address _safeWallet) external onlyDefaultAdmin returns (bool) {
-    require(_safeWallet != address(0), 'Invalid wallet address');
-    require(safeWallet != _safeWallet, 'Same wallet address');
+    if (_safeWallet == address(0)) {
+      revert Errors.AddressCannotBeZero();
+    }
+    if (safeWallet == _safeWallet) {
+      revert Errors.SameWalletAddress();
+    }
     safeWallet = _safeWallet;
     emit WithdrawalWalletUpdated(_safeWallet);
     return true;
@@ -316,8 +322,12 @@ contract TradingVault is
    * @return success A boolean value indicating whether the threshold was successfully updated.
    */
   function setWithdrawalThreshold(uint256 _threshold) external onlyDefaultAdmin returns (bool) {
-    require(_threshold > 0, 'Threshold must be greater than 0');
-    require(WITHDRAWAL_THRESHOLD != _threshold, 'Same threshold');
+    if (_threshold <= 0) {
+      revert Errors.InvalidAmount(_threshold);
+    }
+    if (WITHDRAWAL_THRESHOLD == _threshold) {
+      revert Errors.SameThreshold();
+    }
 
     WITHDRAWAL_THRESHOLD = _threshold;
 

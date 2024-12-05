@@ -26,7 +26,6 @@ import '../utils/Errors.sol';
  * - Upgradeable via UUPS proxy pattern
  * - Pausable for emergency situations
  */
-
 contract GoldPackToken is
   ERC20BurnableUpgradeable,
   AccessControlUpgradeable,

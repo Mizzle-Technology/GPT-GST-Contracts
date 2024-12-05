@@ -32,7 +32,6 @@ import '../utils/Errors.sol';
  * - Access control for role management
  * - UUPS upgradeable pattern
  */
-
 contract HaloLabsCoin is
   ERC20CappedUpgradeable,
   ERC20BurnableUpgradeable,

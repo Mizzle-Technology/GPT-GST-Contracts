@@ -142,7 +142,11 @@ contract BurnVault is
     if (address(_token) == address(0)) {
       revert Errors.AddressCannotBeZero();
     }
-    require(acceptedTokens.contains(address(_token)), 'BurnVault: token not found');
+
+    if (!acceptedTokens.contains(address(_token))) {
+      revert Errors.TokenNotAccepted(address(_token));
+    }
+
     acceptedTokens.remove(address(_token));
   }
 

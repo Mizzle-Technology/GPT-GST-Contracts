@@ -25,7 +25,6 @@ import '@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20Burnable
  * - Burn tokens on behalf of users
  * - Pause/unpause contract functionality
  */
-
 interface IBurnVault {
   /// @notice Updates the accepted tokens list
   function updateAcceptedTokens(ERC20BurnableUpgradeable _token) external;
