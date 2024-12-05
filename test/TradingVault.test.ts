@@ -384,13 +384,13 @@ describe('TradingVault Upgrade Tests', function () {
     it('should revert when setting the withdrawal wallet to the zero address', async function () {
       await expect(
         tradingVault.connect(superAdmin).setWithdrawalWallet(ethers.ZeroAddress),
-      ).to.be.revertedWith('Invalid wallet address');
+      ).to.be.revertedWithCustomError(tradingVault, 'AddressCannotBeZero');
     });
 
     it('should revert when setting the withdrawal wallet to the same address', async function () {
       await expect(
         tradingVault.connect(superAdmin).setWithdrawalWallet(safeWallet),
-      ).to.be.revertedWith('Same wallet address');
+      ).to.be.revertedWithCustomError(tradingVault, 'SameWalletAddress');
     });
   });
 
@@ -420,9 +420,9 @@ describe('TradingVault Upgrade Tests', function () {
     });
 
     it('should revert when setting the withdrawal threshold to zero', async function () {
-      await expect(tradingVault.connect(superAdmin).setWithdrawalThreshold(0)).to.be.revertedWith(
-        'Threshold must be greater than 0',
-      );
+      await expect(tradingVault.connect(superAdmin).setWithdrawalThreshold(0))
+        .to.be.revertedWithCustomError(tradingVault, 'InvalidAmount')
+        .withArgs(0);
     });
 
     it('should revert when setting the withdrawal threshold to the same value', async function () {
@@ -430,7 +430,7 @@ describe('TradingVault Upgrade Tests', function () {
 
       await expect(
         tradingVault.connect(superAdmin).setWithdrawalThreshold(initialThreshold),
-      ).to.be.revertedWith('Same threshold');
+      ).to.be.revertedWithCustomError(tradingVault, 'SameThreshold');
     });
   });
 

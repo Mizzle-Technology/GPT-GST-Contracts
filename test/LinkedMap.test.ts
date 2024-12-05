@@ -102,13 +102,17 @@ describe('LinkedMap', () => {
       const key = ethers.id('test1');
       await linkedMap.add(key);
 
-      await expect(linkedMap.add(key)).to.be.revertedWith('Key already exists');
+      await expect(linkedMap.add(key))
+        .to.be.revertedWithCustomError(linkedMap, 'KeyAlreadyExists')
+        .withArgs(key);
     });
 
     it('should revert when removing non-existent key', async () => {
       const key = ethers.id('test1');
 
-      await expect(linkedMap.remove(key)).to.be.revertedWith('Key does not exist');
+      await expect(linkedMap.remove(key))
+        .to.be.revertedWithCustomError(linkedMap, 'KeyDoesNotExist')
+        .withArgs(key);
     });
   });
 
