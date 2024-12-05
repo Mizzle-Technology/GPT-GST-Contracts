@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import '@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol';
 import '@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20BurnableUpgradeable.sol';
 import '../../contracts/vaults/TradingVault.sol';
 import '../../contracts/vaults/BurnVault.sol';
@@ -148,7 +147,7 @@ interface IReentrancyAttack {
  * @notice Reentrant ERC20 token for testing
  * @dev Used for testing reentrancy
  */
-contract ReentrantERC20 is ERC20Upgradeable, ERC20BurnableUpgradeable {
+contract ReentrantERC20 is ERC20BurnableUpgradeable {
   uint8 private _customDecimals;
 
   /// @notice Initializes the reentrant ERC20 token
