@@ -58,9 +58,6 @@ contract RewardDistribution is
   /// @notice Distribution ID => Distribution
   mapping(bytes32 => Distribution) public distributions;
 
-  /// @notice Last distribution time
-  uint256 public lastDistributionTime;
-
   /**
    * @notice Initializes the contract with the provided super and admin addresses.
    * @param _super The address of the super admin.
@@ -83,8 +80,6 @@ contract RewardDistribution is
     _grantRole(DEFAULT_ADMIN_ROLE, _super);
     _grantRole(ADMIN_ROLE, _admin);
     _setRoleAdmin(ADMIN_ROLE, DEFAULT_ADMIN_ROLE);
-
-    lastDistributionTime = block.timestamp;
 
     // Initialize totalShares to 0%
     totalShares = 0 * SCALE;

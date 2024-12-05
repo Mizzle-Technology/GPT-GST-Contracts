@@ -45,9 +45,6 @@ contract SalesContract is
   /// @notice Number of tokens per troy ounce
   uint256 public constant TOKENS_PER_TROY_OUNCE = 10_000_000000; // 10,000 GPT tokens with 6 decimals
 
-  /// @dev Maximum time allowed between price updates
-  uint256 public constant MAX_PRICE_AGE = 1 hours;
-
   /// @notice Admin role
   bytes32 public constant ADMIN_ROLE = keccak256('ADMIN_ROLE');
   /// @notice Sales role
@@ -59,11 +56,6 @@ contract SalesContract is
   bytes32 public constant ORDER_TYPEHASH =
     keccak256(
       'Order(uint256 roundId,address buyer,uint256 gptAmount,uint256 nonce,uint256 expiry,address paymentToken)'
-    );
-  /// @notice Relayer order type hash for EIP712
-  bytes32 public constant RELAYER_ORDER_TYPEHASH =
-    keccak256(
-      'RelayerOrder(uint256 roundId,address buyer,uint256 gptAmount,uint256 nonce,uint256 expiry,address paymentToken,bytes userSignature)'
     );
   /// @notice Domain separator for EIP712
   bytes32 public DOMAIN_SEPARATOR;
@@ -85,8 +77,6 @@ contract SalesContract is
   mapping(address => bool) public whitelistedAddresses;
   /// @notice Nonces mapping
   mapping(address => uint256) public nonces;
-  /// @notice Timelock expiries mapping
-  mapping(bytes32 => uint256) public timelockExpiries;
   /// @notice Round list
   LinkedMap.LinkedList public roundList;
 

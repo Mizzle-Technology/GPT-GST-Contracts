@@ -30,7 +30,6 @@ import {Errors} from '../utils/Errors.sol';
  * - Access control for role management
  * - UUPS upgradeable pattern
  */
-
 contract TradingVault is
   Initializable,
   AccessControlUpgradeable,

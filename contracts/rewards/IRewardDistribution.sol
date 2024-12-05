@@ -39,7 +39,6 @@ import '@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol';
  * rewardDistribution.claimReward(distributionId);
  * ```
  */
-
 interface IRewardDistribution {
   /// @notice Struct to hold information about a shareholder
   struct Shareholder {

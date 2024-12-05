@@ -57,7 +57,6 @@ import '../sales/ISalesContract.sol';
  * );
  * ```
  */
-
 library SalesLib {
   using SafeERC20 for ERC20Upgradeable;
   using CalculationLib for *;

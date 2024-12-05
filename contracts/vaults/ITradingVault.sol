@@ -27,7 +27,6 @@ pragma solidity 0.8.28;
  * - Pause/unpause contract functionality
  * - Execute/cancel withdrawal requests
  */
-
 interface ITradingVault {
   /// @notice Queues a withdrawal request
   function queueWithdrawal(address token, uint256 amount) external returns (bytes32);
