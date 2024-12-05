@@ -19,7 +19,7 @@ import '@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20Burnable
  * - Deposit tokens that can later be burned
  * - Burn tokens after a delay period
  * - Check balances and token acceptance status
- * 
+ *
  * Admins can:
  * - Update the list of accepted tokens
  * - Burn tokens on behalf of users
