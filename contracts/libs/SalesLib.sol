@@ -10,11 +10,67 @@ import '../tokens/GoldPackToken.sol';
 import './CalculationLib.sol';
 import '../sales/ISalesContract.sol';
 
+/**
+ * @title SalesLib
+ * @dev Library for handling token sales functionality.
+ * @notice This library provides functions to process token purchases and verify signatures.
+ *
+ * @dev Key Features:
+ * - Verifies signatures for user orders
+ * - Processes token purchases with price calculations
+ * - Handles payment token transfers and GPT token minting
+ * - Validates purchase requirements and limits
+ *
+ * @dev Purchase Flow:
+ * 1. Verify signature if required
+ * 2. Check round and vault status
+ * 3. Calculate payment amount based on current prices
+ * 4. Validate user balance
+ * 5. Process payment and mint tokens
+ *
+ * @dev Important Validations:
+ * - Active round check
+ * - Round limits check
+ * - Payment token acceptance check
+ * - User balance check
+ * - Price staleness check
+ *
+ * @dev Usage:
+ * ```solidity
+ * bool isValid = SalesLib.verifySignature(
+ *   domainSeparator,
+ *   orderHash,
+ *   buyer,
+ *   signature
+ * );
+ *
+ * uint256 paymentAmount = SalesLib.processPurchase(
+ *   goldPriceFeed,
+ *   tokenConfig,
+ *   tradingVault,
+ *   gptToken,
+ *   round,
+ *   amount,
+ *   paymentToken,
+ *   buyer,
+ *   tokensPerTroyOunce
+ * );
+ * ```
+ */
+
 library SalesLib {
   using SafeERC20 for ERC20Upgradeable;
   using CalculationLib for *;
 
   // === Signature Verification ===
+  /**
+   * @notice Verifies a signature for a user order.
+   * @param domainSeparator The domain separator for the order.
+   * @param userOrderHash The hash of the user order.
+   * @param buyer The address of the buyer.
+   * @param signature The signature to verify.
+   * @return isValid True if the signature is valid, false otherwise.
+   */
   function verifySignature(
     bytes32 domainSeparator,
     bytes32 userOrderHash,
@@ -26,6 +82,19 @@ library SalesLib {
   }
 
   // === Purchase Processing ===
+  /**
+   * @notice Processes a purchase of GPT tokens.
+   * @param goldPriceFeed The Chainlink price feed for gold.
+   * @param tokenConfig The configuration for the token being purchased.
+   * @param tradingVault The trading vault for handling token transfers.
+   * @param gptToken The GPT token contract for minting new tokens.
+   * @param round The current round of sales.
+   * @param amount The amount of tokens to purchase.
+   * @param paymentToken The payment token address.
+   * @param buyer The address of the buyer.
+   * @param tokensPerTroyOunce The number of tokens per troy ounce.
+   * @return tokenAmount The amount of payment tokens transferred.
+   */
   function processPurchase(
     AggregatorV3Interface goldPriceFeed,
     ISalesContract.TokenConfig memory tokenConfig,

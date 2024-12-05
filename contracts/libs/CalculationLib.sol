@@ -4,7 +4,39 @@ pragma solidity 0.8.28;
 import '@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol';
 import '../utils/Errors.sol';
 
+/**
+ * @title CalculationLib
+ * @dev Library for handling price and token amount calculations.
+ * @notice This library provides functions to calculate token amounts based on gold and token prices.
+ *
+ * @dev Key Features:
+ * - Calculates payment token amounts needed to purchase GPT tokens
+ * - Calculates GPT token amounts based on payment token input
+ * - Handles price validations and decimal conversions
+ * - Supports different payment token decimals
+ *
+ * @dev Price Format:
+ * - Gold price is provided in USD per troy ounce with 8 decimals
+ * - Token prices are provided in USD with 8 decimals
+ * - All calculations maintain precision through appropriate scaling
+ *
+ * @dev Important Constants:
+ * - MAX_PRICE_AGE: Maximum allowed age of price data (1 hour)
+ *
+ * @dev Usage:
+ * ```solidity
+ * uint256 paymentAmount = CalculationLib.calculatePaymentTokenAmount(
+ *   goldPrice,
+ *   tokenPrice,
+ *   gptAmount,
+ *   tokenDecimals,
+ *   tokensPerTroyOunce
+ * );
+ * ```
+ */
+
 library CalculationLib {
+  /// @notice Maximum allowed age of price data (1 hour)
   uint256 public constant MAX_PRICE_AGE = 1 hours;
 
   /**

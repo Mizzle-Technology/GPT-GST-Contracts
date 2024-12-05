@@ -9,15 +9,19 @@ import '../utils/Errors.sol';
  */
 library LinkedMap {
   // === Events ===
+  /// @notice Event emitted when a node is added to the linked list
   event NodeAdded(bytes32 indexed key);
+  /// @notice Event emitted when a node is removed from the linked list
   event NodeRemoved(bytes32 indexed key);
 
+  /// @notice Node structure for the linked list
   struct Node {
     bytes32 prev;
     bytes32 next;
     bool exists;
   }
 
+  /// @notice Linked list structure with mapping storage
   struct LinkedList {
     mapping(bytes32 => Node) nodes;
     bytes32 head;

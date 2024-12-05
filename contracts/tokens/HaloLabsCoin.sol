@@ -13,10 +13,27 @@ import '@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol';
 import '../utils/Errors.sol';
 
 /**
- * @title MizzleTechToken
- * @dev This contract represents the MizzleTechToken, which is an ERC20 token implementation.
- * The contract includes functionalities for token creation, transfer, and other standard ERC20 operations.
+ * @title HaloLabsCoin
+ * @notice ERC20 token representing Halo Labs Coin
+ * @dev Implementation details:
+ * - Implements ERC20 standard with permit functionality
+ * - Capped supply at 1 billion tokens
+ * - Supports burning by token holders
+ * - Includes access control for admin functions
+ * - Upgradeable via UUPS proxy pattern
+ * - Pausable for emergency situations
+ * - 18 decimal places
+ *
+ * Key features:
+ * - Initial supply minted to contract on initialization
+ * - Admin role for privileged operations
+ * - Burnable by token holders
+ * - Permit functionality for gasless approvals
+ * - Pausable by admin for emergency stops
+ * - Access control for role management
+ * - UUPS upgradeable pattern
  */
+
 contract HaloLabsCoin is
   ERC20CappedUpgradeable,
   ERC20BurnableUpgradeable,
@@ -27,18 +44,26 @@ contract HaloLabsCoin is
   UUPSUpgradeable,
   OwnableUpgradeable
 {
-  // Admin role
+  /// @notice Admin role
   bytes32 public constant ADMIN_ROLE = keccak256('ADMIN_ROLE');
+  /// @notice Initial supply
   uint256 public constant INITIAL_SUPPLY = 1_000_000_000 * 10 ** 18;
+  /// @notice Decimals
   uint8 public constant DECIMALS = 18;
 
-  //private
+  /// @notice Gap for upgrade safety
   uint256[50] private __gap;
 
-  // Events
+  /// @notice Tokens minted event
   event TokensMinted(address indexed to, uint256 amount);
+  /// @notice Tokens distributed event
   event TokensDistributed(address indexed to, uint256 amount);
 
+  /**
+   * @notice Initializes the contract
+   * @param _super The address of the super admin
+   * @param _admin The address of the admin
+   */
   function initialize(address _super, address _admin) public initializer {
     __ERC20_init('Halo Labs Coin', 'HLC');
     __ERC20Capped_init(INITIAL_SUPPLY);
@@ -58,12 +83,15 @@ contract HaloLabsCoin is
     emit TokensMinted(address(this), INITIAL_SUPPLY);
   }
 
-  // Override decimals function to return custom decimals
+  /**
+   * @notice Overrides the decimals function to return custom decimals
+   * @return The number of decimals
+   */
   function decimals() public pure override returns (uint8) {
     return DECIMALS;
   }
 
-  // === Modifiers ===
+  /// @notice Modifier to check if caller has ADMIN_ROLE
   modifier onlyAdmin() {
     if (!hasRole(ADMIN_ROLE, msg.sender)) {
       revert Errors.AdminRoleNotGranted(msg.sender);
@@ -71,6 +99,9 @@ contract HaloLabsCoin is
     _;
   }
 
+  /**
+   * @notice Modifier to check if caller has DEFAULT_ADMIN_ROLE
+   */
   modifier onlyDefaultAdmin() {
     if (!hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) {
       revert Errors.DefaultAdminRoleNotGranted(msg.sender);
@@ -120,7 +151,12 @@ contract HaloLabsCoin is
     emit TokensDistributed(recipient, amount);
   }
 
-  // Override the _update function to resolve inheritance conflict
+  /**
+   * @notice Overrides the _update function to resolve inheritance conflict
+   * @param from The address of the sender
+   * @param to The address of the recipient
+   * @param amount The amount of tokens to transfer
+   */
   function _update(
     address from,
     address to,
@@ -129,15 +165,23 @@ contract HaloLabsCoin is
     super._update(from, to, amount);
   }
 
-  // Authorize upgrade function required by UUPSUpgradeable
+  /**
+   * @notice Authorizes the upgrade to a new implementation
+   * @param newImplementation The address of the new implementation
+   */
   function _authorizeUpgrade(address newImplementation) internal override onlyDefaultAdmin {}
 
-  // Pause and unpause functions
+  /**
+   * @notice Pauses the contract
+   */
   function pause() external onlyAdmin {
     _pause();
     emit Paused(msg.sender);
   }
 
+  /**
+   * @notice Unpauses the contract
+   */
   function unpause() external onlyAdmin {
     _unpause();
     emit Unpaused(msg.sender);
