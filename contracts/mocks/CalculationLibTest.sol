@@ -16,7 +16,6 @@ import '../../contracts/libs/CalculationLib.sol';
  * The contract is used for testing the core calculation functions used in
  * token conversions and price lookups.
  */
-
 contract CalculationLibTest {
   /// @notice Calculates payment token amount from GPT amount
   function calculatePaymentTokenAmount(

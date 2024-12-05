@@ -72,8 +72,6 @@ library Errors {
   error WithdrawalAlreadyCancelled(bytes32 requestId);
   /// @notice Withdrawal delay not met error
   error WithdrawalDelayNotMet(bytes32 requestId);
-  /// @notice Withdrawal threshold not met error
-  error WithdrawalThresholdNotMet(uint256 amount, uint256 threshold);
   /// @notice Safe wallet not set error
   error SafeWalletNotSet();
   /// @notice Amount exceeds threshold error
@@ -118,8 +116,6 @@ library Errors {
   error TokenNotAccepted(address token);
   /// @notice Token already accepted error
   error TokenAlreadyAccepted(address token);
-  /// @notice Signature expired error
-  error SignatureExpired();
   /// @notice Order already expired error
   error OrderAlreadyExpired();
   /// @notice Invalid time range error
@@ -130,14 +126,10 @@ library Errors {
   error CannotRecoverGptToken();
   /// @notice Address not whitelisted error
   error AddressNotWhitelisted(address addr);
-  /// @notice Burn vault already set error
-  error BurnVaultAlreadySet(address burnVault);
   /// @notice Invalid gold price error
   error InvalidGoldPrice();
 
   // RewardDistribution errors
-  /// @notice Shares must be greater than zero error
-  error SharesMustBeGreaterThanZero();
   /// @notice Total shares exceed maximum error
   error TotalSharesExceedMaximum();
   /// @notice Shareholder already exists error

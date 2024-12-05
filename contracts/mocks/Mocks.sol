@@ -13,8 +13,10 @@ import '../../contracts/rewards/RewardDistribution.sol';
  * @dev Implements ERC20BurnableUpgradeable for testing
  */
 contract MockERC20 is ERC20BurnableUpgradeable {
+  /// @notice Decimals of the mock ERC20 token
   uint8 private _decimals;
 
+  /// @notice Initializes the mock ERC20 token
   function initialize(
     string memory name,
     string memory symbol,
@@ -28,6 +30,11 @@ contract MockERC20 is ERC20BurnableUpgradeable {
   /// @notice Mints new tokens to an address
   function mint(address to, uint256 amount) public {
     _mint(to, amount);
+  }
+
+  /// @notice Returns the decimals of the mock ERC20 token
+  function decimals() public view override returns (uint8) {
+    return _decimals;
   }
 }
 
@@ -185,11 +192,16 @@ contract ReentrantERC20 is ERC20Upgradeable, ERC20BurnableUpgradeable {
  * @dev Used for testing reentrancy
  */
 contract MaliciousContract is IReentrancyAttack {
+  /// @notice BurnVault contract
   BurnVault public vault;
+  /// @notice ReentrantERC20 token
   ReentrantERC20 public token;
+  /// @notice Flag to check if the contract has been reentered
   bool public reentered;
+  /// @notice Target account for the attack
   address public targetAccount;
 
+  /// @notice Initializes the malicious contract
   constructor(BurnVault _vault, ReentrantERC20 _token) {
     vault = _vault;
     token = _token;
@@ -202,7 +214,10 @@ contract MaliciousContract is IReentrancyAttack {
     vault.depositTokens(amount, token);
   }
 
-  /// @notice Reenters the contract
+  /**
+   * @notice Reenters the contract to test reentrancy
+   * @dev This function is called by the ReentrantERC20 contract
+   */
   function reenter() external override {
     if (!reentered) {
       reentered = true;
@@ -214,7 +229,11 @@ contract MaliciousContract is IReentrancyAttack {
     }
   }
 
-  /// @notice Attacks the burnTokens function
+  /**
+   * @notice Attacks the burnTokens function
+   * @param account Target account
+   * @param amount Amount of tokens to burn
+   */
   function attackBurn(address account, uint256 amount) public {
     targetAccount = account;
     vault.burnTokens(account, amount, token);
