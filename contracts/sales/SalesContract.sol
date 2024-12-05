@@ -517,17 +517,22 @@ contract SalesContract is
   // === View Functions ===
   /**
    * @notice GTP token amount required for a given payment token amount
-   * @return gptAmount The required amount of GPT tokens
+   * @return The required amount of GPT tokens
    */
   function queryGptAmount(
     uint256 paymentTokenAmount,
     address paymentToken
-  ) public view returns (uint256 gptAmount) {
-    require(paymentTokenAmount > 0, 'Amount must be greater than 0');
-    require(paymentToken != address(0), 'Invalid token address');
+  ) public view returns (uint256) {
+    if (paymentTokenAmount <= 0) {
+      revert Errors.InvalidAmount(paymentTokenAmount);
+    }
+    if (paymentToken == address(0)) {
+      revert Errors.AddressCannotBeZero();
+    }
     TokenConfig storage tokenConfig = acceptedTokens[paymentToken];
-    require(tokenConfig.isAccepted, 'Token not accepted');
-    // check if the token config is existed
+    if (!tokenConfig.isAccepted) {
+      revert Errors.TokenNotAccepted(paymentToken);
+    }
 
     (int256 goldPrice, ) = CalculationLib.getLatestPrice(goldPriceFeed);
     (int256 tokenPrice, ) = CalculationLib.getLatestPrice(tokenConfig.priceFeed);
@@ -544,12 +549,18 @@ contract SalesContract is
 
   /**
    * @notice Payment token amount required for a given GPT token amount
-   * @return paymentTokenAmount The required amount of payment tokens
+   * @return The required amount of payment tokens
    */
   function queryPaymentTokenAmount(
     uint256 gptAmount,
     address paymentToken
-  ) public view returns (uint256 paymentTokenAmount) {
+  ) public view returns (uint256) {
+    if (gptAmount <= 0) {
+      revert Errors.InvalidAmount(gptAmount);
+    }
+    if (paymentToken == address(0)) {
+      revert Errors.AddressCannotBeZero();
+    }
     TokenConfig storage tokenConfig = acceptedTokens[paymentToken];
     if (!tokenConfig.isAccepted) {
       revert Errors.TokenNotAccepted(paymentToken);

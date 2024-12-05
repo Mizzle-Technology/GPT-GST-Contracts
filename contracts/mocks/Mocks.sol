@@ -81,37 +81,12 @@ contract MockAggregator {
   }
 
   /// @notice Gets the latest round data from the mock aggregator
-  function latestRoundData()
-    external
-    view
-    returns (
-      uint80 roundId,
-      int256 answer,
-      uint256 startedAt,
-      uint256 updatedAt,
-      uint80 answeredInRound
-    )
-  {
+  function latestRoundData() external view returns (uint80, int256, uint256, uint256, uint80) {
     return (_roundId, _price, _startedAt, _timestamp, _answeredInRound);
   }
 
   /// @notice Gets the round data from the mock aggregator
-  function getRoundData(
-    uint80
-  )
-    external
-    returns (
-      uint80 roundId,
-      int256 answer,
-      uint256 startedAt,
-      uint256 updatedAt,
-      uint80 answeredInRound
-    )
-  {
-    _roundId = roundId;
-    _startedAt = startedAt;
-    _timestamp = updatedAt;
-    _answeredInRound = answeredInRound;
+  function getRoundData(uint80) external view returns (uint80, int256, uint256, uint256, uint80) {
     return (_roundId, _price, _startedAt, _timestamp, _answeredInRound);
   }
 
@@ -147,7 +122,7 @@ interface IReentrancyAttack {
  * @notice Reentrant ERC20 token for testing
  * @dev Used for testing reentrancy
  */
-contract ReentrantERC20 is ERC20BurnableUpgradeable {
+contract ReentrantERC20 is ERC20Upgradeable, ERC20BurnableUpgradeable {
   uint8 private _customDecimals;
 
   /// @notice Initializes the reentrant ERC20 token
@@ -261,7 +236,7 @@ contract TestCalculationLib {
     uint256 paymentTokenAmount,
     uint8 tokenDecimals,
     uint256 tokensPerTroyOunce
-  ) public pure returns (uint256 gptAmount) {
+  ) public pure returns (uint256) {
     return
       CalculationLib.calculateGptAmount(
         goldPrice,
@@ -279,7 +254,7 @@ contract TestCalculationLib {
     uint256 gptAmount,
     uint8 tokenDecimals,
     uint256 tokensPerTroyOunce
-  ) public pure returns (uint256 tokenAmount) {
+  ) public pure returns (uint256) {
     return
       CalculationLib.calculatePaymentTokenAmount(
         goldPrice,

@@ -458,9 +458,7 @@ contract RewardDistribution is
    * @return isLocked Whether the shareholder's rewards are locked.
    * @return isActivated Whether the shareholder is activated.
    */
-  function getShareholders(
-    address account
-  ) external view returns (uint256 shares, bool isLocked, bool isActivated) {
+  function getShareholders(address account) external view returns (uint256, bool, bool) {
     if (account == address(0)) {
       revert Errors.AddressCannotBeZero();
     }
@@ -477,12 +475,7 @@ contract RewardDistribution is
    */
   function getDistribution(
     bytes32 distributionId
-  )
-    external
-    view
-    override
-    returns (address rewardToken, uint256 totalRewards, uint256 distributionTime)
-  {
+  ) external view override returns (address, uint256, uint256) {
     Distribution storage distribution = distributions[distributionId];
     return (distribution.rewardToken, distribution.totalRewards, distribution.distributionTime);
   }
