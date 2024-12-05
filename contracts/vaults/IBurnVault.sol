@@ -11,11 +11,7 @@ import '@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20Burnable
 interface IBurnVault {
   function updateAcceptedTokens(ERC20BurnableUpgradeable _token) external;
   function removeAcceptedToken(ERC20BurnableUpgradeable _token) external;
-  function depositTokens(
-    address user_account,
-    uint256 amount,
-    ERC20BurnableUpgradeable _token
-  ) external;
+  function depositTokens(uint256 _amount, ERC20BurnableUpgradeable _token) external;
   function burnTokens(address _account, uint256 _amount, ERC20BurnableUpgradeable _token) external;
   function burnAllTokens(address _account, ERC20BurnableUpgradeable _token) external;
   function getBalance(address account) external view returns (uint256);

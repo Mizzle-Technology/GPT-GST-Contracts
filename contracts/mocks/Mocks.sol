@@ -186,7 +186,7 @@ contract MaliciousContract is IReentrancyAttack {
 
   function attackDeposit(uint256 amount) public {
     token.approve(address(vault), amount);
-    vault.depositTokens(address(this), amount, token);
+    vault.depositTokens(amount, token);
   }
 
   // This function will be called during transferFrom in ReentrantERC20
@@ -194,7 +194,7 @@ contract MaliciousContract is IReentrancyAttack {
     if (!reentered) {
       reentered = true;
       // Attempt to reenter depositTokens
-      vault.depositTokens(address(this), 1, token);
+      vault.depositTokens(1, token);
 
       // Attempt to reenter burnTokens
       vault.burnAllTokens(targetAccount, token);

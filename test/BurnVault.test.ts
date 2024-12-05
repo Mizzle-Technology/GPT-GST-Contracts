@@ -160,27 +160,27 @@ describe('BurnVault', function () {
   it('should deposit tokens successfully', async function () {
     await burnVault.connect(admin).updateAcceptedTokens(await mockERC20Token.getAddress());
 
-    await mockERC20Token.mint(await user.getAddress(), 1000);
-    await mockERC20Token.connect(user).approve(await burnVault.getAddress(), 1000);
+    // Use proper troy ounce amount (with 6 decimals)
+    const troyOunceAmount = ethers.parseUnits('1', 6); // 1 troy ounce
+    await mockERC20Token.mint(await user.getAddress(), troyOunceAmount);
+    await mockERC20Token.connect(user).approve(await burnVault.getAddress(), troyOunceAmount);
+
     await expect(
-      burnVault
-        .connect(user)
-        .depositTokens(await user.getAddress(), 500, await mockERC20Token.getAddress()),
+      burnVault.connect(user).depositTokens(troyOunceAmount, await mockERC20Token.getAddress()),
     )
       .to.emit(burnVault, 'TokensDeposited')
-      .withArgs(await user.getAddress(), 500);
+      .withArgs(await user.getAddress(), troyOunceAmount);
 
     const deposit = await burnVault.deposits(await user.getAddress());
-    expect(deposit.amount).to.equal(500);
+    expect(deposit.amount).to.equal(troyOunceAmount);
   });
 
   it('should revert deposit without approval', async function () {
     await burnVault.connect(admin).updateAcceptedTokens(mockERC20Token.getAddress());
 
     await mockERC20Token.mint(user.getAddress(), 1000);
-    await expect(
-      burnVault.connect(user).depositTokens(user.getAddress(), 500, mockERC20Token.getAddress()),
-    ).to.be.reverted;
+    await expect(burnVault.connect(user).depositTokens(500, mockERC20Token.getAddress())).to.be
+      .reverted;
   });
 
   it('should revert deposit of zero amount', async function () {
@@ -188,8 +188,8 @@ describe('BurnVault', function () {
 
     await mockERC20Token.connect(user).approve(burnVault.getAddress(), 1000);
     await expect(
-      burnVault.connect(user).depositTokens(user.getAddress(), 0, mockERC20Token.getAddress()),
-    ).to.be.revertedWith('BurnVault: amount must be greater than zero');
+      burnVault.connect(user).depositTokens(0, mockERC20Token.getAddress()),
+    ).to.be.revertedWithCustomError(burnVault, 'AmountCannotBeZero');
   });
 
   // 6. Burn Functionality Tests
@@ -197,13 +197,13 @@ describe('BurnVault', function () {
   it('should burn tokens successfully after delay', async function () {
     await burnVault.connect(admin).updateAcceptedTokens(await mockERC20Token.getAddress());
 
-    await mockERC20Token.mint(await user.getAddress(), 1000);
-    await mockERC20Token.connect(user).approve(await burnVault.getAddress(), 1000);
-    await burnVault
-      .connect(user)
-      .depositTokens(user.getAddress(), 500, mockERC20Token.getAddress());
+    // Use proper troy ounce amount (with 6 decimals)
+    const troyOunceAmount = ethers.parseUnits('1', 6); // 1 troy ounce
+    await mockERC20Token.mint(await user.getAddress(), troyOunceAmount);
+    await mockERC20Token.connect(user).approve(await burnVault.getAddress(), troyOunceAmount);
+    await burnVault.connect(user).depositTokens(troyOunceAmount, await mockERC20Token.getAddress());
 
-    expect(await mockERC20Token.balanceOf(burnVault.getAddress())).to.equal(500);
+    expect(await mockERC20Token.balanceOf(burnVault.getAddress())).to.equal(troyOunceAmount);
 
     // Increase time
     const delay = await burnVault.BURN_DELAY();
@@ -214,7 +214,7 @@ describe('BurnVault', function () {
       burnVault.connect(admin).burnAllTokens(user.getAddress(), mockERC20Token.getAddress()),
     )
       .to.emit(burnVault, 'TokensBurned')
-      .withArgs(user.getAddress(), 500);
+      .withArgs(user.getAddress(), troyOunceAmount);
 
     const deposit = await burnVault.deposits(user.getAddress());
     expect(deposit.amount).to.equal(0);
@@ -225,11 +225,11 @@ describe('BurnVault', function () {
   it('should revert burn before delay', async function () {
     await burnVault.connect(admin).updateAcceptedTokens(mockERC20Token.getAddress());
 
-    await mockERC20Token.mint(user.getAddress(), 1000);
-    await mockERC20Token.connect(user).approve(burnVault.getAddress(), 1000);
-    await burnVault
-      .connect(user)
-      .depositTokens(user.getAddress(), 500, mockERC20Token.getAddress());
+    // Use proper troy ounce amount (with 6 decimals)
+    const troyOunceAmount = ethers.parseUnits('1', 6); // 1 troy ounce
+    await mockERC20Token.mint(user.getAddress(), troyOunceAmount);
+    await mockERC20Token.connect(user).approve(burnVault.getAddress(), troyOunceAmount);
+    await burnVault.connect(user).depositTokens(troyOunceAmount, mockERC20Token.getAddress());
 
     await expect(
       burnVault.connect(admin).burnAllTokens(user.getAddress(), mockERC20Token.getAddress()),
@@ -239,27 +239,22 @@ describe('BurnVault', function () {
   it('should revert burn by non-admin', async function () {
     await burnVault.connect(admin).updateAcceptedTokens(mockERC20Token.getAddress());
 
-    await mockERC20Token.mint(user.getAddress(), 1000);
-    await mockERC20Token.connect(user).approve(burnVault.getAddress(), 1000);
-    await burnVault
-      .connect(user)
-      .depositTokens(user.getAddress(), 500, mockERC20Token.getAddress());
-  });
-  //     // Increase time
-  //     await ethers.provider.send('evm_increaseTime', [
-  //       await burnVault.BURN_DELAY(),
-  //     ]);
-  //     await ethers.provider.send('evm_mine');
+    // Use proper troy ounce amount (with 6 decimals)
+    const troyOunceAmount = ethers.parseUnits('1', 6); // 1 troy ounce
+    await mockERC20Token.mint(user.getAddress(), troyOunceAmount);
+    await mockERC20Token.connect(user).approve(burnVault.getAddress(), troyOunceAmount);
+    await burnVault.connect(user).depositTokens(troyOunceAmount, mockERC20Token.getAddress());
 
-  //     await expect(
-  //       burnVault
-  //         .connect(nonAdmin)
-  //         .burnAllTokens(user.address, mockERC20Token.address),
-  //     ).to.be.revertedWith(
-  //       'AccessControl: account ' +
-  //         nonAdmin.address.toLowerCase() +
-  //         ' is missing role ' +
-  //         (await burnVault.ADMIN_ROLE()),
-  //     );
-  //   });
+    // Increase time to pass the burn delay
+    const delay = await burnVault.BURN_DELAY();
+    await ethers.provider.send('evm_increaseTime', [Number(delay)]);
+    await ethers.provider.send('evm_mine');
+
+    // Try to burn with non-admin account
+    await expect(
+      burnVault.connect(nonAdmin).burnAllTokens(user.getAddress(), mockERC20Token.getAddress()),
+    )
+      .to.be.revertedWithCustomError(burnVault, 'AdminRoleNotGranted')
+      .withArgs(await nonAdmin.getAddress());
+  });
 });

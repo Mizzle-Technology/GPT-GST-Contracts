@@ -54,6 +54,14 @@ contract RewardDistribution is
   // Reward schedule variables
   uint256 public lastDistributionTime;
 
+  /**
+   * @notice Initializes the contract with the provided super and admin addresses.
+   * @param _super The address of the super admin.
+   * @param _admin The address of the admin.
+   *
+   * Requirements:
+   * - Both addresses must not be the zero address.
+   */
   function initialize(address _super, address _admin) public initializer {
     if (_super == address(0) || _admin == address(0)) {
       revert Errors.AddressCannotBeZero();
@@ -161,9 +169,13 @@ contract RewardDistribution is
    * - The token address must not be the zero address.
    * - The token must not already be supported.
    */
-  function addRewardToken(address token) external override onlyRole(ADMIN_ROLE) {
-    require(token != address(0), 'Invalid token address');
-    require(!supportTokens[token], 'Token already supported');
+  function addRewardToken(address token) external override onlyAdmin {
+    if (token == address(0)) {
+      revert Errors.AddressCannotBeZero();
+    }
+    if (supportTokens[token]) {
+      revert Errors.TokenAlreadyAccepted(token);
+    }
 
     rewardTokens.add(token);
     supportTokens[token] = true;
@@ -179,9 +191,13 @@ contract RewardDistribution is
    * - Only accounts with ADMIN_ROLE can call.
    * - The token must be supported.
    */
-  function removeRewardToken(address token) external override onlyRole(ADMIN_ROLE) {
-    require(address(token) != address(0), 'Invalid token address');
-    require(supportTokens[token], 'Token not supported');
+  function removeRewardToken(address token) external override onlyAdmin {
+    if (token == address(0)) {
+      revert Errors.AddressCannotBeZero();
+    }
+    if (!supportTokens[token]) {
+      revert Errors.TokenNotAccepted(token);
+    }
 
     rewardTokens.remove(token);
     supportTokens[token] = false;
@@ -205,9 +221,13 @@ contract RewardDistribution is
   function topUpRewards(
     uint256 amount,
     address token
-  ) external override onlyRole(ADMIN_ROLE) whenNotPaused nonReentrant {
-    require(amount > 0, 'Amount must be greater than zero');
-    require(supportTokens[token], 'Token not supported');
+  ) external override onlyAdmin whenNotPaused nonReentrant {
+    if (amount == 0) {
+      revert Errors.AmountCannotBeZero();
+    }
+    if (!supportTokens[token]) {
+      revert Errors.TokenNotAccepted(token);
+    }
 
     // Transfer reward tokens from the admin to the contract
     ERC20Upgradeable(token).safeTransferFrom(msg.sender, address(this), amount);
@@ -225,8 +245,12 @@ contract RewardDistribution is
    */
   function claimReward(bytes32 distributionId) external override nonReentrant whenNotPaused {
     Distribution storage distribution = distributions[distributionId];
-    require(!distribution.claimed[msg.sender], 'Rewards already claimed for this distribution');
-    require(block.timestamp >= distribution.distributionTime, 'Rewards not yet claimable');
+    if (distribution.claimed[msg.sender]) {
+      revert Errors.RewardsAlreadyClaimed(msg.sender);
+    }
+    if (block.timestamp < distribution.distributionTime) {
+      revert Errors.RewardsNotYetClaimable(distributionId);
+    }
 
     Shareholder storage shareholder = shareholders[msg.sender];
     if (!shareholder.isActivated) {
@@ -248,6 +272,13 @@ contract RewardDistribution is
     emit RewardsClaimed(msg.sender, rewardAmount, distribution.rewardToken, distributionId);
   }
 
+  /**
+   * @notice Allows shareholders to claim all their rewards.
+   *
+   * Requirements:
+   * - Rewards must not be locked for the caller.
+   * - Caller must have shares allocated.
+   */
   function claimAllRewards() external override nonReentrant whenNotPaused {
     Shareholder storage shareholder = shareholders[msg.sender];
     if (!shareholder.isActivated) {
@@ -285,7 +316,7 @@ contract RewardDistribution is
    * - `user` cannot be the zero address.
    * - Rewards must not already be locked for the user.
    */
-  function lockRewards(address user) external override onlyRole(ADMIN_ROLE) {
+  function lockRewards(address user) external override onlyAdmin {
     if (user == address(0)) {
       revert Errors.AddressCannotBeZero();
     }
@@ -308,7 +339,7 @@ contract RewardDistribution is
    * - `user` cannot be the zero address.
    * - Rewards must already be locked for the user.
    */
-  function unlockRewards(address user) external override onlyRole(ADMIN_ROLE) {
+  function unlockRewards(address user) external override onlyAdmin {
     if (user == address(0)) {
       revert Errors.AddressCannotBeZero();
     }
@@ -346,12 +377,19 @@ contract RewardDistribution is
     address token,
     uint256 totalRewards,
     uint256 distributionTime
-  ) external override onlyRole(ADMIN_ROLE) whenNotPaused {
-    require(totalRewards > 0, 'Invalid reward amount');
-    require(distributionTime > block.timestamp, 'Distribution time must be in the future');
+  ) external override onlyAdmin whenNotPaused {
+    if (totalRewards == 0) {
+      revert Errors.AmountCannotBeZero();
+    }
+    if (distributionTime <= block.timestamp) {
+      revert Errors.InvalidTimeRange(block.timestamp, distributionTime);
+    }
 
     ERC20Upgradeable rewardToken = ERC20Upgradeable(token);
-    require(rewardToken.balanceOf(address(this)) >= totalRewards, 'Insufficient funds');
+    uint256 balance = rewardToken.balanceOf(address(this));
+    if (balance < totalRewards) {
+      revert Errors.InsufficientBalance(balance, totalRewards);
+    }
 
     bytes32 distributionId = keccak256(
       abi.encodePacked(totalRewards, distributionTime, block.timestamp)
@@ -375,7 +413,7 @@ contract RewardDistribution is
    * Requirements:
    * - Only accounts with ADMIN_ROLE can call.
    */
-  function pause() external override onlyRole(DEFAULT_ADMIN_ROLE) {
+  function pause() external override onlyDefaultAdmin {
     _pause();
   }
 
@@ -385,16 +423,29 @@ contract RewardDistribution is
    * Requirements:
    * - Only accounts with ADMIN_ROLE can call.
    */
-  function unpause() external override onlyRole(DEFAULT_ADMIN_ROLE) {
+  function unpause() external override onlyDefaultAdmin {
     _unpause();
   }
 
   // === Upgradeability ===
-  function _authorizeUpgrade(
-    address newImplementation
-  ) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
+  /**
+   * @notice Authorizes the upgrade of the contract to a new implementation.
+   * @param newImplementation The address of the new implementation.
+   *
+   * Requirements:
+   * - Only the default admin can authorize the upgrade.
+   */
+  function _authorizeUpgrade(address newImplementation) internal override onlyDefaultAdmin {}
 
   // === View Functions ===
+
+  /**
+   * @notice Retrieves the shares, lock status, and activation status of a shareholder.
+   * @param account The address of the shareholder.
+   * @return shares The number of shares allocated to the shareholder.
+   * @return isLocked Whether the shareholder's rewards are locked.
+   * @return isActivated Whether the shareholder is activated.
+   */
   function getShareholders(
     address account
   ) external view returns (uint256 shares, bool isLocked, bool isActivated) {
@@ -405,6 +456,13 @@ contract RewardDistribution is
     return (shareholder.shares, shareholder.isLocked, shareholder.isActivated);
   }
 
+  /**
+   * @notice Retrieves the reward token, total rewards, and distribution time for a given distribution ID.
+   * @param distributionId The ID of the distribution.
+   * @return rewardToken The address of the reward token.
+   * @return totalRewards The total amount of rewards to be distributed.
+   * @return distributionTime The time when the rewards will be distributed.
+   */
   function getDistribution(
     bytes32 distributionId
   )
