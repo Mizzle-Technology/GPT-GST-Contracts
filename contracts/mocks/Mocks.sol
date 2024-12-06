@@ -99,7 +99,7 @@ contract MockAggregator {
 
   /// @notice Gets the decimals of the mock aggregator
   function decimals() external pure returns (uint8) {
-    return _decimals;
+    return DECIMALS;
   }
 }
 
