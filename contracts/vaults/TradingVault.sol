@@ -7,6 +7,7 @@ import '@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol';
 import '@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol';
 import '@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol';
 import '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
+import '@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol';
 import './ITradingVault.sol';
 import {Errors} from '../utils/Errors.sol';
 /**
@@ -36,6 +37,7 @@ contract TradingVault is
   ReentrancyGuardUpgradeable,
   PausableUpgradeable,
   UUPSUpgradeable,
+  OwnableUpgradeable,
   ITradingVault
 {
   using SafeERC20 for ERC20Upgradeable;
@@ -80,7 +82,7 @@ contract TradingVault is
     __ReentrancyGuard_init();
     __Pausable_init();
     __UUPSUpgradeable_init();
-
+    __Ownable_init(_super);
     _grantRole(DEFAULT_ADMIN_ROLE, _super);
     _grantRole(ADMIN_ROLE, _admin);
     _setRoleAdmin(ADMIN_ROLE, DEFAULT_ADMIN_ROLE);
