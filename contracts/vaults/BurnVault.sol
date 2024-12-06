@@ -15,7 +15,24 @@ import {Errors} from '../utils/Errors.sol';
 
 /**
  * @title BurnVault
- * @notice This contract manages the burning of tokens after a specified delay.
+ * @notice Contract for burning GPT tokens after a delay period
+ * @dev Implementation details:
+ * - Accepts GPT token deposits from users
+ * - Enforces a 7 day delay before burning is allowed
+ * - Burns tokens in increments of 10000 GPT (1 Troy ounce)
+ * - Includes access control for admin functions
+ * - Upgradeable via UUPS proxy pattern
+ * - Pausable for emergency situations
+ *
+ * Key features:
+ * - Deposit tracking per user
+ * - Configurable accepted tokens
+ * - Admin role for privileged operations
+ * - Burn delay enforcement
+ * - Troy ounce conversion handling
+ * - Emergency pause functionality
+ * - Access control for role management
+ * - UUPS upgradeable pattern
  */
 contract BurnVault is
   Initializable,
@@ -125,7 +142,11 @@ contract BurnVault is
     if (address(_token) == address(0)) {
       revert Errors.AddressCannotBeZero();
     }
-    require(acceptedTokens.contains(address(_token)), 'BurnVault: token not found');
+
+    if (!acceptedTokens.contains(address(_token))) {
+      revert Errors.TokenNotAccepted(address(_token));
+    }
+
     acceptedTokens.remove(address(_token));
   }
 
@@ -205,6 +226,20 @@ contract BurnVault is
     _burn(_account, deposits[_account].amount, _token);
   }
 
+  /**
+   * @dev Internal function to burn tokens from an account.
+   * @param _account The account whose tokens to burn.
+   * @param _amount The amount of tokens to burn.
+   * @param _token The token to burn.
+   * Requirements:
+   * - Account cannot be zero address
+   * - Amount cannot be zero
+   * - Account must have sufficient balance
+   * - Token must be accepted
+   * - Vault must have sufficient balance
+   * - BURN_DELAY must have passed since last deposit
+   * Emits a {TokensBurned} event.
+   */
   function _burn(address _account, uint256 _amount, ERC20BurnableUpgradeable _token) internal {
     if (_account == address(0)) {
       revert Errors.AddressCannotBeZero();

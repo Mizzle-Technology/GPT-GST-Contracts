@@ -9,15 +9,19 @@ import '../utils/Errors.sol';
  */
 library LinkedMap {
   // === Events ===
+  /// @notice Event emitted when a node is added to the linked list
   event NodeAdded(bytes32 indexed key);
+  /// @notice Event emitted when a node is removed from the linked list
   event NodeRemoved(bytes32 indexed key);
 
+  /// @notice Node structure for the linked list
   struct Node {
     bytes32 prev;
     bytes32 next;
     bool exists;
   }
 
+  /// @notice Linked list structure with mapping storage
   struct LinkedList {
     mapping(bytes32 => Node) nodes;
     bytes32 head;
@@ -33,8 +37,8 @@ library LinkedMap {
    * @return success True if the operation was successful.
    */
   function add(LinkedList storage self, bytes32 key) internal returns (bool) {
-    require(key != bytes32(0), 'Zero key not allowed');
-    require(!self.nodes[key].exists, 'Key already exists');
+    if (key == bytes32(0)) revert Errors.AddressCannotBeZero();
+    if (self.nodes[key].exists) revert Errors.KeyAlreadyExists(key);
 
     Node memory newNode = Node({prev: self.tail, next: bytes32(0), exists: true});
 
@@ -61,8 +65,8 @@ library LinkedMap {
    * @return success True if the operation was successful.
    */
   function remove(LinkedList storage self, bytes32 key) internal returns (bool) {
-    require(key != bytes32(0), 'Zero key not allowed');
-    require(self.nodes[key].exists, 'Key does not exist');
+    if (key == bytes32(0)) revert Errors.AddressCannotBeZero();
+    if (!self.nodes[key].exists) revert Errors.KeyDoesNotExist(key);
 
     Node storage node = self.nodes[key];
 

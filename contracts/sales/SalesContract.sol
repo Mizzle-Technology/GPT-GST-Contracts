@@ -28,7 +28,6 @@ import '../utils/Errors.sol';
  *      SALES_ROLE: Sales and round management
  *      Data Feeds for Testnet: https://docs.chain.link/data-feeds/price-feeds/addresses?network=ethereum&page=1
  *      Data Feeds for Mainnet: https://data.chain.link/feeds
- * Emits an {AddressWhitelisted} event.
  */
 contract SalesContract is
   Initializable,
@@ -43,36 +42,42 @@ contract SalesContract is
   using LinkedMap for LinkedMap.LinkedList;
 
   // === Constants ===
+  /// @notice Number of tokens per troy ounce
   uint256 public constant TOKENS_PER_TROY_OUNCE = 10_000_000000; // 10,000 GPT tokens with 6 decimals
 
-  /// @dev Maximum time allowed between price updates
-  uint256 public constant MAX_PRICE_AGE = 1 hours;
-
+  /// @notice Admin role
   bytes32 public constant ADMIN_ROLE = keccak256('ADMIN_ROLE');
+  /// @notice Sales role
   bytes32 public constant SALES_ROLE = keccak256('SALES_ROLE');
+  /// @notice Domain type hash for EIP712
   bytes32 private constant DOMAIN_TYPE_HASH =
     keccak256('EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)');
+  /// @notice Order type hash for EIP712
   bytes32 public constant ORDER_TYPEHASH =
     keccak256(
       'Order(uint256 roundId,address buyer,uint256 gptAmount,uint256 nonce,uint256 expiry,address paymentToken)'
     );
-  // bytes32 public constant RELAYER_ORDER_TYPEHASH =
-  //   keccak256(
-  //     'RelayerOrder(uint256 roundId,address buyer,uint256 gptAmount,uint256 nonce,uint256 expiry,address paymentToken,bytes userSignature)'
-  //   );
+  /// @notice Domain separator for EIP712
   bytes32 public DOMAIN_SEPARATOR;
 
   // === State Variables ===
+  /// @notice Trusted signer address
   address public trustedSigner;
+  /// @notice GPT token contract
   GoldPackToken public gptToken;
+  /// @notice Trading vault contract
   TradingVault public tradingVault;
+  /// @notice Gold price feed contract
   AggregatorV3Interface public goldPriceFeed;
-
+  /// @notice Accepted tokens mapping
   mapping(address => TokenConfig) public acceptedTokens;
+  /// @notice Rounds mapping
   mapping(bytes32 => Round) public rounds;
+  /// @notice Whitelisted addresses mapping
   mapping(address => bool) public whitelistedAddresses;
+  /// @notice Nonces mapping
   mapping(address => uint256) public nonces;
-  mapping(bytes32 => uint256) public timelockExpiries;
+  /// @notice Round list
   LinkedMap.LinkedList public roundList;
 
   // === Constructor ===
@@ -92,9 +97,17 @@ contract SalesContract is
     address _trustedSigner,
     address _tradingVault
   ) public initializer {
-    require(_gptToken != address(0), 'Invalid GPT address');
-    require(_goldPriceFeed != address(0), 'Invalid price feed address');
-    require(_trustedSigner != address(0), 'Invalid signer address');
+    if (
+      _super == address(0) ||
+      _admin == address(0) ||
+      _sales_manager == address(0) ||
+      _gptToken == address(0) ||
+      _goldPriceFeed == address(0) ||
+      _trustedSigner == address(0) ||
+      _tradingVault == address(0)
+    ) {
+      revert Errors.AddressCannotBeZero();
+    }
 
     __AccessControl_init();
     __ReentrancyGuard_init();
@@ -124,6 +137,9 @@ contract SalesContract is
   }
 
   // === Modifier ===
+  /**
+   * @notice Modifier to check if the caller has the sales role
+   */
   modifier onlySales() {
     if (!hasRole(SALES_ROLE, msg.sender)) {
       revert Errors.SalesRoleNotGranted(msg.sender);
@@ -131,6 +147,9 @@ contract SalesContract is
     _;
   }
 
+  /**
+   * @notice Modifier to check if the caller has the admin role
+   */
   modifier onlyAdmin() {
     if (!hasRole(ADMIN_ROLE, msg.sender)) {
       revert Errors.AdminRoleNotGranted(msg.sender);
@@ -138,6 +157,9 @@ contract SalesContract is
     _;
   }
 
+  /**
+   * @notice Modifier to check if the caller has the default admin role
+   */
   modifier onlyDefaultAdmin() {
     if (!hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) {
       revert Errors.DefaultAdminRoleNotGranted(msg.sender);
@@ -177,7 +199,9 @@ contract SalesContract is
    * @param token Address of the token to remove
    */
   function removeAcceptedToken(address token) external onlyAdmin {
-    require(acceptedTokens[token].isAccepted, 'Token not accepted');
+    if (!acceptedTokens[token].isAccepted) {
+      revert Errors.TokenNotAccepted(token);
+    }
     delete acceptedTokens[token];
   }
 
@@ -476,7 +500,9 @@ contract SalesContract is
    * - Only admin can call
    */
   function addToWhitelist(address addr) external override onlySales {
-    require(addr != address(0), 'Invalid address');
+    if (addr == address(0)) {
+      revert Errors.AddressCannotBeZero();
+    }
 
     whitelistedAddresses[addr] = true;
 
@@ -517,17 +543,22 @@ contract SalesContract is
   // === View Functions ===
   /**
    * @notice GTP token amount required for a given payment token amount
-   * @return gptAmount The required amount of GPT tokens
+   * @return The required amount of GPT tokens
    */
   function queryGptAmount(
     uint256 paymentTokenAmount,
     address paymentToken
-  ) public view returns (uint256 gptAmount) {
-    require(paymentTokenAmount > 0, 'Amount must be greater than 0');
-    require(paymentToken != address(0), 'Invalid token address');
+  ) public view returns (uint256) {
+    if (paymentTokenAmount <= 0) {
+      revert Errors.InvalidAmount(paymentTokenAmount);
+    }
+    if (paymentToken == address(0)) {
+      revert Errors.AddressCannotBeZero();
+    }
     TokenConfig storage tokenConfig = acceptedTokens[paymentToken];
-    require(tokenConfig.isAccepted, 'Token not accepted');
-    // check if the token config is existed
+    if (!tokenConfig.isAccepted) {
+      revert Errors.TokenNotAccepted(paymentToken);
+    }
 
     (int256 goldPrice, ) = CalculationLib.getLatestPrice(goldPriceFeed);
     (int256 tokenPrice, ) = CalculationLib.getLatestPrice(tokenConfig.priceFeed);
@@ -544,12 +575,18 @@ contract SalesContract is
 
   /**
    * @notice Payment token amount required for a given GPT token amount
-   * @return paymentTokenAmount The required amount of payment tokens
+   * @return The required amount of payment tokens
    */
   function queryPaymentTokenAmount(
     uint256 gptAmount,
     address paymentToken
-  ) public view returns (uint256 paymentTokenAmount) {
+  ) public view returns (uint256) {
+    if (gptAmount <= 0) {
+      revert Errors.InvalidAmount(gptAmount);
+    }
+    if (paymentToken == address(0)) {
+      revert Errors.AddressCannotBeZero();
+    }
     TokenConfig storage tokenConfig = acceptedTokens[paymentToken];
     if (!tokenConfig.isAccepted) {
       revert Errors.TokenNotAccepted(paymentToken);

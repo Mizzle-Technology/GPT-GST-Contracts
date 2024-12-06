@@ -49,7 +49,7 @@ describe('CalculationLib', () => {
           tokenDecimals,
           tokensPerTroyOunce,
         ),
-      ).to.be.revertedWith('Invalid gold price');
+      ).to.be.revertedWithCustomError(calculationLib, 'InvalidGoldPrice');
 
       // Test invalid token price
       await expect(
@@ -60,7 +60,7 @@ describe('CalculationLib', () => {
           tokenDecimals,
           tokensPerTroyOunce,
         ),
-      ).to.be.revertedWith('Invalid token price');
+      ).to.be.revertedWithCustomError(calculationLib, 'InvalidTokenPrice');
 
       // Test invalid GPT amount
       await expect(
@@ -71,7 +71,7 @@ describe('CalculationLib', () => {
           tokenDecimals,
           tokensPerTroyOunce,
         ),
-      ).to.be.revertedWith('GPT amount must be greater than zero');
+      ).to.be.revertedWithCustomError(calculationLib, 'AmountCannotBeZero');
     });
   });
 
@@ -108,7 +108,7 @@ describe('CalculationLib', () => {
           tokenDecimals,
           tokensPerTroyOunce,
         ),
-      ).to.be.revertedWith('Invalid gold price');
+      ).to.be.revertedWithCustomError(calculationLib, 'InvalidGoldPrice');
 
       // Test invalid token price
       await expect(
@@ -119,7 +119,7 @@ describe('CalculationLib', () => {
           tokenDecimals,
           tokensPerTroyOunce,
         ),
-      ).to.be.revertedWith('Invalid token price');
+      ).to.be.revertedWithCustomError(calculationLib, 'InvalidTokenPrice');
     });
   });
 

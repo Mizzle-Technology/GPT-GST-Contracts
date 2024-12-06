@@ -17,12 +17,14 @@ import '../utils/Errors.sol';
 
 /**
  * @title GoldPackToken
- * @author Felix, Kun, and Andrew
- * @notice Gold-backed ERC20 token with 1 GPT = 1/10000 Troy ounce of gold
+ * @notice ERC20 token representing gold pack ownership
  * @dev Implementation details:
- * - Role-based access control for admin functions
- * - Burning restricted to whole Troy ounce increments
- * - Integration with BurnVault for controlled token burning
+ * - Implements ERC20 standard with permit functionality
+ * - Supports minting by sales contract
+ * - Supports burning by token holders
+ * - Includes access control for admin functions
+ * - Upgradeable via UUPS proxy pattern
+ * - Pausable for emergency situations
  */
 contract GoldPackToken is
   ERC20BurnableUpgradeable,
@@ -34,20 +36,20 @@ contract GoldPackToken is
   UUPSUpgradeable,
   IGoldPackToken
 {
-  // Admin role
+  /// @notice Admin role
   bytes32 public constant ADMIN_ROLE = keccak256('ADMIN_ROLE');
 
-  // Sales role for minting tokens
+  /// @notice Sales role for minting tokens
   bytes32 public constant SALES_ROLE = keccak256('SALES_ROLE');
 
-  // Define the customer decimals for the token
+  /// @notice Decimals for the token
   uint8 public constant DECIMALS = 6;
 
-  //private
+  /// @notice Gap for upgrade safety
   uint256[50] private __gap;
 
   /**
-   * @dev Initializes the contract with the specified roles.
+   * @notice Initializes the contract with the specified roles.
    * @param _super The address of the super admin
    * @param _admin The address of the admin
    * @param _sales_manager The address of the sales manager
@@ -75,7 +77,7 @@ contract GoldPackToken is
   }
 
   /**
-   * @dev Returns the number of decimals used by the token
+   * @notice Returns the number of decimals used by the token
    * @return The number of decimals
    */
   function decimals() public pure override returns (uint8) {
@@ -83,7 +85,7 @@ contract GoldPackToken is
   }
 
   /**
-   * @dev Custom Modifier to check if caller has SALES_ROLE
+   * @notice Custom Modifier to check if caller has SALES_ROLE
    */
   modifier onlySalesRole() {
     if (!hasRole(SALES_ROLE, msg.sender)) {
@@ -93,7 +95,7 @@ contract GoldPackToken is
   }
 
   /**
-   * @dev Custom Modifier to check if caller has ADMIN_ROLE
+   * @notice Custom Modifier to check if caller has ADMIN_ROLE
    */
   modifier onlyAdminRole() {
     if (!hasRole(ADMIN_ROLE, msg.sender)) {
@@ -102,6 +104,9 @@ contract GoldPackToken is
     _;
   }
 
+  /**
+   * @notice Custom Modifier to check if caller has DEFAULT_ADMIN_ROLE
+   */
   modifier onlyDefaultAdminRole() {
     if (!hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) {
       revert Errors.DefaultAdminRoleNotGranted(msg.sender);
@@ -110,7 +115,7 @@ contract GoldPackToken is
   }
 
   /**
-   * @dev Mints tokens to the specified address.
+   * @notice Mints tokens to the specified address.
    * @param _to The address to mint tokens to
    * @param _amount The amount of tokens to mint (1 GPT = 1/10000 Troy ounce)
    * Requirements:
@@ -131,7 +136,7 @@ contract GoldPackToken is
   }
 
   /**
-   * @dev Checks if an account has admin role
+   * @notice Checks if an account has admin role
    * @param account Address to check
    * @return bool true if account has admin role
    */
@@ -140,7 +145,7 @@ contract GoldPackToken is
   }
 
   /**
-   * @dev Checks if an account has sales role
+   * @notice Checks if an account has sales role
    * @param account Address to check
    * @return bool true if account has sales role
    */
@@ -149,7 +154,7 @@ contract GoldPackToken is
   }
 
   /**
-   * @dev Checks if the contract supports an interface
+   * @notice Checks if the contract supports an interface
    * @param interfaceId The interface ID to check
    * @return bool true if the contract supports the interface
    */
@@ -164,7 +169,7 @@ contract GoldPackToken is
   // === Pausable ===
 
   /**
-   * @dev Pauses the contract
+   * @notice Pauses the contract
    * @dev Only callable by admin
    */
   function pause() external virtual whenNotPaused onlyAdminRole {
@@ -172,7 +177,7 @@ contract GoldPackToken is
   }
 
   /**
-   * @dev Unpauses the contract
+   * @notice Unpauses the contract
    * @dev Only callable by admin
    */
   function unpause() external virtual whenPaused onlyAdminRole {
@@ -182,7 +187,8 @@ contract GoldPackToken is
   // === UUPS Upgrade ===
 
   /**
-   * @dev Authorizes the upgrade to a new implementation
+   * @notice Authorizes the upgrade to a new implementation
+   * @param newImplementation The address of the new implementation
    * @dev Only callable by default admin
    */
   function _authorizeUpgrade(
@@ -192,7 +198,8 @@ contract GoldPackToken is
   // === Role Management ===
 
   /**
-   * @dev Grants the sales role to an account
+   * @notice Grants the sales role to an account
+   * @param _account The address to grant the sales role to
    * @dev Only callable by default admin
    */
   function grantSalesRole(address _account) external onlyDefaultAdminRole {
@@ -207,7 +214,8 @@ contract GoldPackToken is
   }
 
   /**
-   * @dev Grants the admin role to an account
+   * @notice Grants the admin role to an account
+   * @param _account The address to grant the admin role to
    * @dev Only callable by default admin
    */
   function grantAdminRole(address _account) external onlyDefaultAdminRole {
@@ -222,7 +230,8 @@ contract GoldPackToken is
   }
 
   /**
-   * @dev Revokes the sales role from an account
+   * @notice Revokes the sales role from an account
+   * @param _account The address to revoke the sales role from
    * @dev Only callable by default admin
    */
   function revokeSalesRole(address _account) external onlyDefaultAdminRole {
@@ -234,7 +243,8 @@ contract GoldPackToken is
   }
 
   /**
-   * @dev Revokes the admin role from an account
+   * @notice Revokes the admin role from an account
+   * @param _account The address to revoke the admin role from
    * @dev Only callable by default admin
    */
   function revokeAdminRole(address _account) external onlyDefaultAdminRole {
@@ -246,7 +256,10 @@ contract GoldPackToken is
   }
 
   /**
-   * @dev Emergency withdrawal function
+   * @notice Emergency withdrawal function
+   * @param token The address of the token to withdraw
+   * @param to The address to send the tokens to
+   * @param amount The amount of tokens to withdraw
    * @dev Only callable by default admin when paused
    */
   function emergencyWithdraw(

@@ -36,23 +36,27 @@ contract RewardDistribution is
   using LinkedMap for LinkedMap.LinkedList;
 
   // === constants ===
+  /// @notice Admin role
   bytes32 public constant ADMIN_ROLE = keccak256('ADMIN_ROLE');
-  // Represents 100% shares scaled by 1e18
+  /// @notice Represents 100% shares scaled by 1e18
   uint256 public constant SCALE = 1e18;
+  /// @notice Total shares allocated
+  uint256 public totalShares;
+  /// @notice Gap for upgrade safety
+  uint256[50] private __gap;
+  /// @notice Total number of shareholders
+  EnumerableSet.AddressSet private shareholderAddresses;
+  /// @notice Reward tokens
+  EnumerableSet.AddressSet private rewardTokens;
+  /// @notice List of distributions
+  LinkedMap.LinkedList private distributionList;
 
-  uint256 public totalShares; // total shares allocated
-  uint256[50] private __gap; // gap for upgrade safety
-  EnumerableSet.AddressSet private shareholderAddresses; // total number of shareholders
-  EnumerableSet.AddressSet private rewardTokens; // reward tokens
-  LinkedMap.LinkedList private distributionList; // List of distributions
-
-  // Mapping to store shareholders and their shares
+  /// @notice Shareholders and their shares
   mapping(address => Shareholder) public shareholders;
-  mapping(address => bool) public supportTokens; // Support tokens
-  mapping(bytes32 => Distribution) public distributions; // Distribution ID => Distribution
-
-  // Reward schedule variables
-  uint256 public lastDistributionTime;
+  /// @notice Support tokens
+  mapping(address => bool) public supportTokens;
+  /// @notice Distribution ID => Distribution
+  mapping(bytes32 => Distribution) public distributions;
 
   /**
    * @notice Initializes the contract with the provided super and admin addresses.
@@ -76,8 +80,6 @@ contract RewardDistribution is
     _grantRole(DEFAULT_ADMIN_ROLE, _super);
     _grantRole(ADMIN_ROLE, _admin);
     _setRoleAdmin(ADMIN_ROLE, DEFAULT_ADMIN_ROLE);
-
-    lastDistributionTime = block.timestamp;
 
     // Initialize totalShares to 0%
     totalShares = 0 * SCALE;
@@ -352,6 +354,11 @@ contract RewardDistribution is
     emit RewardsUnlocked(user);
   }
 
+  /**
+   * @notice Checks if a token is supported.
+   * @param token The address of the token to check.
+   * @return True if the token is supported, false otherwise.
+   */
   function isRewardToken(address token) external view override returns (bool) {
     if (token == address(0)) {
       revert Errors.AddressCannotBeZero();
@@ -363,6 +370,7 @@ contract RewardDistribution is
 
   /**
    * @notice Creates a new reward distribution with the specified total rewards and distribution time.
+   * @param token The address of the reward token.
    * @param totalRewards The total amount of rewards to be distributed.
    * @param distributionTime The time when the rewards will be distributed.
    *
@@ -371,7 +379,6 @@ contract RewardDistribution is
    * - The contract must not be paused.
    * - The `totalRewards` parameter must be greater than zero.
    * - The `distributionTime` parameter must be in the future.
-   * - The contract must have sufficient funds to cover the reward distribution.
    */
   function createDistribution(
     address token,
@@ -446,9 +453,7 @@ contract RewardDistribution is
    * @return isLocked Whether the shareholder's rewards are locked.
    * @return isActivated Whether the shareholder is activated.
    */
-  function getShareholders(
-    address account
-  ) external view returns (uint256 shares, bool isLocked, bool isActivated) {
+  function getShareholders(address account) external view returns (uint256, bool, bool) {
     if (account == address(0)) {
       revert Errors.AddressCannotBeZero();
     }
@@ -465,12 +470,7 @@ contract RewardDistribution is
    */
   function getDistribution(
     bytes32 distributionId
-  )
-    external
-    view
-    override
-    returns (address rewardToken, uint256 totalRewards, uint256 distributionTime)
-  {
+  ) external view override returns (address, uint256, uint256) {
     Distribution storage distribution = distributions[distributionId];
     return (distribution.rewardToken, distribution.totalRewards, distribution.distributionTime);
   }
