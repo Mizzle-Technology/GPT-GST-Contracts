@@ -45,7 +45,7 @@ contract MockERC20 is ERC20BurnableUpgradeable {
  */
 contract MockAggregator {
   int256 private _price;
-  uint8 private constant _decimals = 8;
+  uint8 private constant DECIMALS = 8;
   uint256 private _timestamp;
   uint80 private _roundId;
   uint256 private _startedAt;
