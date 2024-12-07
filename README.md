@@ -11,12 +11,14 @@ This repository contains a suite of contracts and a utility library for managing
 The contracts included:
 
 1. **GPT Contract**: A gold-backed ERC20 token with minting and burning capabilities.
+
    - UUPS upgradeable pattern
    - Role-based access control (Super Admin, Admin, Sales roles)
    - Decimal precision: 18
    - Transfer restrictions during setup
 
 2. **Sales Contract**: Manages the sales of GPT tokens across different sale stages.
+
    - Pre-sale functionality with whitelist
    - Public sale with signature verification
    - Round-based sales management
@@ -24,12 +26,14 @@ The contracts included:
    - Integration with TradingVault for payment custody
 
 3. **BurnVault**: Provides a time-delayed token burning vault.
+
    - Controlled burning process
    - Role-based access for burn operations
    - Detailed event tracking
    - Integration with GoldPackToken
 
 4. **TradingVault**: A vault for managing withdrawals.
+
    - Delayed withdrawal mechanism with configurable timelock
    - Threshold-based approval system
    - Safe wallet integration for secure storage
@@ -38,6 +42,7 @@ The contracts included:
    - Token whitelist management
 
 5. **RewardDistribution**: Handles reward distribution to stakeholders.
+
    - Shareholder management with shares tracking
    - Configurable distribution periods
    - Locking mechanism for shares
@@ -119,7 +124,7 @@ Payment Amount = (2000 * 100) / (1 * 10000) = 20 USDC
 #### Reverse Calculation (GPT from Payment)
 
 ```solidity
-gptAmount = (paymentTokenAmount * tokenPrice * tokensPerTroyOunce) / 
+gptAmount = (paymentTokenAmount * tokenPrice * tokensPerTroyOunce) /
             (10^tokenDecimals * goldPrice)
 
 Example:
@@ -150,14 +155,14 @@ if (tokensPerTroyOunce == 0) revert InvalidTroyOunceAmount();
 
 ```solidity
 // Round validation
-if (round.tokensSold + gptAmount > round.maxTokens) 
+if (round.tokensSold + gptAmount > round.maxTokens)
     revert ExceedMaxAllocation();
 
 // Whitelist checks
 if (!isWhitelisted[msg.sender]) revert NotWhitelisted();
 
 // Signature verification
-if (!isValidSignature(order, signature)) 
+if (!isValidSignature(order, signature))
     revert InvalidSignature();
 ```
 
@@ -165,9 +170,9 @@ if (!isValidSignature(order, signature))
 
 ```solidity
 // Withdrawal checks
-if (amount > withdrawalThreshold) 
+if (amount > withdrawalThreshold)
     revert ExceedsThreshold();
-if (block.timestamp < withdrawalTime) 
+if (block.timestamp < withdrawalTime)
     revert WithdrawalNotReady();
 ```
 
@@ -180,11 +185,8 @@ if (block.timestamp < withdrawalTime)
 const isWhitelisted = await salesContract.isWhitelisted(buyerAddress);
 
 // 2. Calculate payment amount
-const gptAmount = ethers.utils.parseEther("100");
-const paymentAmount = await salesContract.calculatePaymentAmount(
-    gptAmount,
-    usdcAddress
-);
+const gptAmount = ethers.utils.parseEther('100');
+const paymentAmount = await salesContract.calculatePaymentAmount(gptAmount, usdcAddress);
 
 // 3. Approve USDC spending
 await usdc.approve(salesContract.address, paymentAmount);
@@ -198,10 +200,10 @@ await salesContract.preSalePurchase(gptAmount, usdcAddress);
 ```typescript
 // 1. Prepare order
 const order = {
-    buyer: buyerAddress,
-    gptAmount: ethers.utils.parseEther("100"),
-    paymentToken: usdcAddress,
-    nonce: await salesContract.nonces(buyerAddress)
+  buyer: buyerAddress,
+  gptAmount: ethers.utils.parseEther('100'),
+  paymentToken: usdcAddress,
+  nonce: await salesContract.nonces(buyerAddress),
 };
 
 // 2. Get signature from backend
@@ -209,8 +211,8 @@ const signature = await getSignatureFromBackend(order);
 
 // 3. Approve USDC
 const paymentAmount = await salesContract.calculatePaymentAmount(
-    order.gptAmount,
-    order.paymentToken
+  order.gptAmount,
+  order.paymentToken,
 );
 await usdc.approve(salesContract.address, paymentAmount);
 
@@ -224,12 +226,12 @@ await salesContract.authorizePurchase(order, signature);
 
 ```solidity
 struct Round {
-    uint256 startTime;      // Round start timestamp
-    uint256 endTime;        // Round end timestamp
-    uint256 maxTokens;      // Maximum tokens for the round
-    uint256 tokensSold;     // Tokens sold in the round
-    bool isPreSale;         // Whether this is a pre-sale round
-    bool initialized;       // Round initialization status
+  uint256 startTime; // Round start timestamp
+  uint256 endTime; // Round end timestamp
+  uint256 maxTokens; // Maximum tokens for the round
+  uint256 tokensSold; // Tokens sold in the round
+  bool isPreSale; // Whether this is a pre-sale round
+  bool initialized; // Round initialization status
 }
 ```
 
@@ -238,12 +240,7 @@ struct Round {
 ##### 1. Round Initialization
 
 ```typescript
-await salesContract.initializeRound(
-    startTime,
-    endTime,
-    maxTokens,
-    isPreSale
-);
+await salesContract.initializeRound(startTime, endTime, maxTokens, isPreSale);
 ```
 
 ##### 2. Round Status Checks
@@ -394,16 +391,12 @@ npx hardhat coverage
 ### Using OpenZeppelin Defender
 
 ```typescript
-const gptProxy = await upgrades.deployProxy(
-  GoldPackTokenFactory,
-  [superAdmin, admin, sales],
-  { 
-    kind: 'uups',
-    defender: {
-      useDefenderDeploy: true
-    }
-  }
-);
+const gptProxy = await upgrades.deployProxy(GoldPackTokenFactory, [superAdmin, admin, sales], {
+  kind: 'uups',
+  defender: {
+    useDefenderDeploy: true,
+  },
+});
 ```
 
 ### Networks Supported
