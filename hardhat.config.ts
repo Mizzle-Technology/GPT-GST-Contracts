@@ -40,7 +40,7 @@ const config: HardhatUserConfig = {
       chainId: 1337,
     },
     sepolia: {
-      url: process.env.SEPOLIA_URL,
+      url: process.env.SEPOLIA_URL || '',
       chainId: 11155111,
     },
   },
