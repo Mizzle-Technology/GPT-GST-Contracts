@@ -9,9 +9,9 @@ import * as dotenv from 'dotenv';
 
 dotenv.config();
 
-if (!process.env.DEFENDER_API_KEY || !process.env.DEFENDER_SECRET_KEY) {
-  throw new Error('DEFENDER_API_KEY and DEFENDER_SECRET_KEY must be set');
-}
+// if (!process.env.DEFENDER_API_KEY || !process.env.DEFENDER_SECRET_KEY) {
+//   throw new Error('DEFENDER_API_KEY and DEFENDER_SECRET_KEY must be set');
+// }
 
 const config: HardhatUserConfig = {
   solidity: {
@@ -45,8 +45,8 @@ const config: HardhatUserConfig = {
     },
   },
   defender: {
-    apiKey: process.env.DEFENDER_API_KEY,
-    apiSecret: process.env.DEFENDER_SECRET_KEY,
+    apiKey: process.env.DEFENDER_API_KEY || '',
+    apiSecret: process.env.DEFENDER_SECRET_KEY || '',
   },
 };
 
