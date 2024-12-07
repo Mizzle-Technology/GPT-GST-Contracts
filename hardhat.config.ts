@@ -47,7 +47,6 @@ const config: HardhatUserConfig = {
   defender: {
     apiKey: process.env.DEFENDER_API_KEY,
     apiSecret: process.env.DEFENDER_SECRET_KEY,
-    useDefenderDeploy: true,
   },
 };
 

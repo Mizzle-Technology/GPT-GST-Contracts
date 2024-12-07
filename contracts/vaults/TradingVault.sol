@@ -74,7 +74,7 @@ contract TradingVault is
    * @param _admin Address of the admin
    * @param _super Address of the super admin
    */
-  function initialize(address _safeWallet, address _admin, address _super) public initializer {
+  function initialize(address _safeWallet, address _super, address _admin) public initializer {
     if (_super == address(0) || _admin == address(0) || _safeWallet == address(0)) {
       revert Errors.AddressCannotBeZero();
     }

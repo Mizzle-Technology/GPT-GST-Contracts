@@ -14,6 +14,7 @@ async function main() {
     {
       initializer: 'initialize',
       kind: 'uups',
+      useDefenderDeploy: true,
     },
   );
 
@@ -24,10 +25,11 @@ async function main() {
   const TradingVaultFactory = await ethers.getContractFactory('TradingVault');
   const tradingVault = await upgrades.deployProxy(
     TradingVaultFactory,
-    [safeWallet, admin, superAdmin],
+    [safeWallet, superAdmin, admin],
     {
       initializer: 'initialize',
       kind: 'uups',
+      useDefenderDeploy: true,
     },
   );
 
@@ -48,6 +50,7 @@ async function main() {
     {
       initializer: 'initialize',
       kind: 'uups',
+      useDefenderDeploy: true,
     },
   );
 
@@ -59,6 +62,7 @@ async function main() {
   const burnVault = await upgrades.deployProxy(BurnVaultFactory, [superAdmin, admin], {
     initializer: 'initialize',
     kind: 'uups',
+    useDefenderDeploy: true,
   });
 
   await burnVault.waitForDeployment();
@@ -72,6 +76,7 @@ async function main() {
     {
       initializer: 'initialize',
       kind: 'uups',
+      useDefenderDeploy: true,
     },
   );
 

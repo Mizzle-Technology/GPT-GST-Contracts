@@ -884,12 +884,7 @@
           },
           "t_enum(SaleStage)12159": {
             "label": "enum ISalesContract.SaleStage",
-            "members": [
-              "PreMarketing",
-              "PreSale",
-              "PublicSale",
-              "SaleEnded"
-            ],
+            "members": ["PreMarketing", "PreSale", "PublicSale", "SaleEnded"],
             "numberOfBytes": "1"
           },
           "t_mapping(t_address,t_struct(TokenConfig)12120_storage)": {
