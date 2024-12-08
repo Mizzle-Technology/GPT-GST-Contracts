@@ -8,7 +8,7 @@ import '@chainlink/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.so
 import '../vaults/TradingVault.sol';
 import '../tokens/GoldPackToken.sol';
 import './CalculationLib.sol';
-import '../sales/ISalesContract.sol';
+import '../interface/ISalesContract.sol';
 
 /**
  * @title SalesLib
