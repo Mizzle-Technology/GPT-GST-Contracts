@@ -20,6 +20,12 @@ deploy: compile
 	@echo "Deploying contracts..."
 	$(FORGE) script $(DEPLOY_SCRIPT) --broadcast --verify --rpc-url <YOUR_RPC_URL>
 
+# Testnet deploy
+testnet-deploy:
+	@echo "Deploying contracts to testnet..."
+	$(HARDHAT) compile
+	$(HARDHAT) run scripts/test-deploy.ts --network sepolia
+
 # Run tests
 test: compile
 	@echo "Running tests..."

@@ -77,7 +77,7 @@ describe('TradingVault Upgrade Tests', function () {
     const TradingVaultFactory = await ethers.getContractFactory('TradingVault', deployer);
     tradingVault = (await upgrades.deployProxy(
       TradingVaultFactory,
-      [await safeWallet.getAddress(), await admin.getAddress(), await superAdmin.getAddress()],
+      [await safeWallet.getAddress(), await superAdmin.getAddress(), await admin.getAddress()],
       { initializer: 'initialize' },
     )) as unknown as TradingVault;
     await tradingVault.waitForDeployment();

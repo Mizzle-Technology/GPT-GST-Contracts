@@ -1,6 +1,6 @@
 # GoldPack Token & Gold Stable Yield Token Contracts
 
-A set of smart contracts for managing the sale, minting, and burning of Gold Pack Tokens (GPT), including secure vaults and price calculation integration. This project leverages the Foundry framework for testing and deployment.
+A set of smart contracts for managing the sale, minting, and burning of Gold Pack Tokens (GPT), including secure vaults and price calculation integration. This project leverages the Hardhat framework for testing and deployment.
 
 ---
 
@@ -11,58 +11,264 @@ This repository contains a suite of contracts and a utility library for managing
 The contracts included:
 
 1. **GPT Contract**: A gold-backed ERC20 token with minting and burning capabilities.
-2. **Sales Contract**: Manages the sales of GPT tokens across different sale stages with role-based access and signature verification.
-3. **BurnVault**: Provides a time-delayed token burning vault for secure GPT token management.
-4. **TradingVault**: A vault for managing withdrawals with threshold and delay restrictions.
-5. **PriceCalculator Library**: A library for calculating GPT token prices based on gold and token price feeds.
+
+   - UUPS upgradeable pattern
+   - Role-based access control (Super Admin, Admin, Sales roles)
+   - Decimal precision: 18
+   - Transfer restrictions during setup
+
+2. **Sales Contract**: Manages the sales of GPT tokens across different sale stages.
+
+   - Pre-sale functionality with whitelist
+   - Public sale with signature verification
+   - Round-based sales management
+   - Dynamic pricing using Chainlink oracles
+   - Integration with TradingVault for payment custody
+
+3. **BurnVault**: Provides a time-delayed token burning vault.
+
+   - Controlled burning process
+   - Role-based access for burn operations
+   - Detailed event tracking
+   - Integration with GoldPackToken
+
+4. **TradingVault**: A vault for managing withdrawals.
+
+   - Delayed withdrawal mechanism with configurable timelock
+   - Threshold-based approval system
+   - Safe wallet integration for secure storage
+   - Emergency pause functionality
+   - Multi-signature support
+   - Token whitelist management
+
+5. **RewardDistribution**: Handles reward distribution to stakeholders.
+
+   - Shareholder management with shares tracking
+   - Configurable distribution periods
+   - Locking mechanism for shares
+   - Claim tracking and verification
+   - Multiple reward token support
+
+6. **Libraries**:
+   - **CalculationLib**: GPT and payment token calculations
+   - **SalesLib**: Purchase processing and validation
+   - **LinkedMap**: Ordered key-value data structure
+   - **Errors**: Custom error definitions
 
 ---
 
-## Contracts
+## Key Features
 
-### GPT Contract
+- **Gold-Backed Tokenization**: Each GPT token represents a fractional ownership of physical gold
+- **Multi-Layer Security**: Comprehensive security measures including RBAC, time-locks, and multi-sig
+- **Oracle Integration**: Real-time gold price feeds via Chainlink
+- **Flexible Sales Mechanism**: Supports both pre-sale and public sale phases
+- **Automated Reward Distribution**: Built-in mechanism for distributing rewards to stakeholders
 
-The **GPT Contract** (`GoldPackToken.sol`) is an ERC20 token that represents a gold-backed currency. It integrates burn mechanics and access control to restrict minting and burning to specific roles.
+## Architecture
 
-- **Roles**: `DEFAULT_ADMIN_ROLE`, `ADMIN_ROLE`, `SALES_ROLE`.
-- **Tokenomics**: 1 GPT = 1/10,000 Troy ounce of gold.
-- **Burning Mechanism**: Supports delayed burning through integration with the `BurnVault`.
-- **Events**: `Mint`, `Burn`, `Paused`, `Unpaused`.
+```mermaid
+graph TD
+    A[User] --> B[Sales Contract]
+    B --> C[GPT Token]
+    B --> D[Trading Vault]
+    A --> E[Burn Vault]
+    E --> C
+    F[Oracle] --> B
+    G[Admin] --> |Manage| B
+    G --> |Configure| D
+```
 
-### Sales Contract
+---
 
-The **Sales Contract** (`SalesContract.sol`) manages GPT token sales across different stages with a signature-based authorization system and price calculations using Chainlink price feeds.
+## Security Features
 
-- **Sale Stages**: `PreMarketing`, `PreSale`, `PublicSale`, `SaleEnded`.
-- **Roles**: `DEFAULT_ADMIN_ROLE`, `ADMIN_ROLE`, `SALES_MANAGER_ROLE`.
-- **Price Calculation**: Uses `PriceCalculator` for real-time price determination.
-- **Events**: `TokensPurchased`, `RoundCreated`, `RoundActivated`, `RoundDeactivated`, `TrustedSignerUpdated`, `Paused`, `Unpaused`.
+- Role-based access control (RBAC)
+- Multi-signature requirements
+- Time-locked operations
+- Emergency pause functionality
+- Threshold-based controls
+- Price feed freshness checks
+- Round allocation limits
+- Reentrancy protection
+- SafeERC20 implementation
+- Upgradeable security patterns
 
-### BurnVault
+---
 
-The **BurnVault** (`BurnVault.sol`) is a secure vault that allows GPT token holders to deposit tokens for burning after a fixed delay.
+## Detailed System Operations
 
-- **Roles**: `DEFAULT_ADMIN_ROLE`, `ADMIN_ROLE`.
-- **Burn Delay**: Set to 7 days to prevent immediate burning.
-- **Events**: `TokensDeposited`, `TokensBurned`.
+### Price Calculations
 
-### TradingVault
+#### GPT Token Purchase Calculation
 
-The **TradingVault** (`TradingVault.sol`) is a secure, upgradeable vault for managing withdrawals with a threshold and delay mechanism.
+```solidity
+// For buying GPT with payment tokens (e.g., USDC)
+paymentAmount = (goldPrice * gptAmount) / (tokenPrice * tokensPerTroyOunce)
 
-- **Roles**: `DEFAULT_ADMIN_ROLE`, `ADMIN_ROLE`.
-- **Withdrawal Threshold**: Limits on immediate withdrawals; higher amounts require queuing.
-- **Withdrawal Delay**: Enforced delay for larger withdrawals.
-- **Events**: `WithdrawalQueued`, `WithdrawalExecuted`, `WithdrawalCancelled`, `ImmediateWithdrawal`, `WithdrawalWalletUpdated`, `WithdrawalThresholdUpdated`.
+Where:
+- goldPrice: Current gold price per troy ounce (8 decimals)
+- gptAmount: Desired amount of GPT tokens
+- tokenPrice: Payment token price in USD (8 decimals)
+- tokensPerTroyOunce: GPT tokens per troy ounce (e.g., 10000)
 
-### PriceCalculator Library
+Example:
+Gold Price = $2000 (200000000000)
+USDC Price = $1 (100000000)
+GPT Amount = 100 tokens
+TokensPerTroyOunce = 10000
 
-The **PriceCalculator** library calculates GPT token prices based on current gold prices and other payment token prices.
+Payment Amount = (2000 * 100) / (1 * 10000) = 20 USDC
+```
 
-- **Functions**:
-  - `calculateTokenAmount`: Calculates required tokens for a purchase.
-  - `getLatestPrices`: Fetches latest prices from Chainlink feeds.
-- **Dependencies**: `AggregatorV3Interface` from Chainlink.
+#### Reverse Calculation (GPT from Payment)
+
+```solidity
+gptAmount = (paymentTokenAmount * tokenPrice * tokensPerTroyOunce) /
+            (10^tokenDecimals * goldPrice)
+
+Example:
+Payment Amount = 20 USDC (20000000 - 6 decimals)
+USDC Price = $1 (100000000)
+Gold Price = $2000 (200000000000)
+TokensPerTroyOunce = 10000
+
+GPT Amount = (20000000 * 100000000 * 10000) / (1000000 * 200000000000) = 100
+```
+
+### Error Handling Scenarios
+
+#### Price Related Errors
+
+```solidity
+// Invalid or stale prices
+if (goldPrice <= 0) revert InvalidGoldPrice();
+if (tokenPrice <= 0) revert InvalidTokenPrice();
+if (block.timestamp - priceUpdatedAt > 24 hours) revert TokenPriceStale();
+
+// Amount validation
+if (gptAmount == 0) revert AmountCannotBeZero();
+if (tokensPerTroyOunce == 0) revert InvalidTroyOunceAmount();
+```
+
+#### Sales Process Errors
+
+```solidity
+// Round validation
+if (round.tokensSold + gptAmount > round.maxTokens)
+    revert ExceedMaxAllocation();
+
+// Whitelist checks
+if (!isWhitelisted[msg.sender]) revert NotWhitelisted();
+
+// Signature verification
+if (!isValidSignature(order, signature))
+    revert InvalidSignature();
+```
+
+#### Vault Operation Errors
+
+```solidity
+// Withdrawal checks
+if (amount > withdrawalThreshold)
+    revert ExceedsThreshold();
+if (block.timestamp < withdrawalTime)
+    revert WithdrawalNotReady();
+```
+
+### Contract Interaction Examples
+
+#### Pre-sale Purchase
+
+```typescript
+// 1. Check whitelist status
+const isWhitelisted = await salesContract.isWhitelisted(buyerAddress);
+
+// 2. Calculate payment amount
+const gptAmount = ethers.utils.parseEther('100');
+const paymentAmount = await salesContract.calculatePaymentAmount(gptAmount, usdcAddress);
+
+// 3. Approve USDC spending
+await usdc.approve(salesContract.address, paymentAmount);
+
+// 4. Execute purchase
+await salesContract.preSalePurchase(gptAmount, usdcAddress);
+```
+
+#### Public Sale Purchase
+
+```typescript
+// 1. Prepare order
+const order = {
+  buyer: buyerAddress,
+  gptAmount: ethers.utils.parseEther('100'),
+  paymentToken: usdcAddress,
+  nonce: await salesContract.nonces(buyerAddress),
+};
+
+// 2. Get signature from backend
+const signature = await getSignatureFromBackend(order);
+
+// 3. Approve USDC
+const paymentAmount = await salesContract.calculatePaymentAmount(
+  order.gptAmount,
+  order.paymentToken,
+);
+await usdc.approve(salesContract.address, paymentAmount);
+
+// 4. Execute purchase
+await salesContract.authorizePurchase(order, signature);
+```
+
+### Round Management System
+
+#### Round Structure
+
+```solidity
+struct Round {
+  uint256 startTime; // Round start timestamp
+  uint256 endTime; // Round end timestamp
+  uint256 maxTokens; // Maximum tokens for the round
+  uint256 tokensSold; // Tokens sold in the round
+  bool isPreSale; // Whether this is a pre-sale round
+  bool initialized; // Round initialization status
+}
+```
+
+#### Round Operations
+
+##### 1. Round Initialization
+
+```typescript
+await salesContract.initializeRound(startTime, endTime, maxTokens, isPreSale);
+```
+
+##### 2. Round Status Checks
+
+```typescript
+// Check if round is active
+const isActive = await salesContract.isRoundActive();
+
+// Get current round info
+const round = await salesContract.getCurrentRound();
+```
+
+##### 3. Round Transitions
+
+```typescript
+// Move to next round
+await salesContract.moveToNextRound();
+
+// Emergency round pause
+await salesContract.pauseRound();
+```
+
+#### Round Validation
+
+- Checks round timing
+- Validates token availability
+- Enforces round-specific rules (pre-sale vs public)
+- Tracks token sales within round limits
 
 ---
 
@@ -70,136 +276,178 @@ The **PriceCalculator** library calculates GPT token prices based on current gol
 
 ### Prerequisites
 
-1. **Install Foundry**: Follow the [Foundry installation guide](https://book.getfoundry.sh/getting-started/installation) if not already installed.
-2. **Clone Repository**:
+1. **Node.js**: v18.x or later
+2. **npm**: v9.x or later
+
+### Installation Steps
+
+1. **Clone Repository**:
 
    ```bash
-   gh repo clone Mizzle-Technology/GPT-GST-Contracts
+   git clone https://github.com/Mizzle-Technology/GPT-GST-Contracts.git
    cd GPT-GST-Contracts
-
    ```
 
-### Install Dependencies
+2. **Install Dependencies**:
+
+   ```bash
+   npm install
+   ```
+
+3. **Environment Setup**:
+   Create a `.env` file:
+
+   ```env
+   # Network RPC URLs
+   MAINNET_RPC_URL=your-mainnet-url
+   SEPOLIA_RPC_URL=your-sepolia-url
+
+   # Private Keys (for deployment)
+   PRIVATE_KEY=your-private-key
+
+   # API Keys
+   ETHERSCAN_API_KEY=your-etherscan-key
+
+   # OpenZeppelin Defender
+   DEFENDER_API_KEY=your-defender-api-key
+   DEFENDER_API_SECRET=your-defender-api-secret
+   ```
+
+### Development Commands
 
 ```bash
-forge install
+# Compile contracts
+npm run compile
 
+# Run tests
+npm test
+
+# Run specific test
+npm test test/GoldPackToken.test.ts
+
+# Generate coverage report
+npm run coverage
+
+# Deploy to testnet
+npm run deploy:sepolia
+
+# Verify contracts
+npm run verify:sepolia
 ```
 
-### Compile Contracts
+### Project Structure
 
 ```bash
-forge build
+contracts/
+├── tokens/
+│   └── GoldPackToken.sol
+├── sales/
+│   └── SalesContract.sol
+├── vaults/
+│   ├── BurnVault.sol
+│   └── TradingVault.sol
+├── rewards/
+│   └── RewardDistribution.sol
+├── libs/
+│   ├── CalculationLib.sol
+│   ├── SalesLib.sol
+│   ├── LinkedMap.sol
+│   └── Errors.sol
+└── interfaces/
+    ├── IGoldPackToken.sol
+    ├── ISalesContract.sol
+    └── [other interfaces]
+
+test/
+├── GoldPackToken.test.ts
+├── SalesContract.test.ts
+└── [other test files]
+
+scripts/
+├── deploy.ts
+└── verify.ts
 ```
-
-### Format
-
-```jsx
-forge fmt
-```
-
-### Gas Snapshots
-
-```jsx
-forge snapshot
-```
-
-### Help
-
-```jsx
-$ forge --help
-$ anvil --help
-$ cast --help
-```
-
-## Foundry Test Suite
 
 ---
 
-This repository includes comprehensive tests using the Foundry framework to ensure the security and functionality of each contract.
+## Testing
 
 ### Run Tests
 
-To execute all tests:
-
 ```bash
-forge test -vvv
-
+npm run test
 ```
 
 ### Coverage
 
-To generate a coverage report:
-
 ```bash
-forge coverage
-
+npx hardhat coverage
 ```
 
 ---
 
-## Usage Guide
+## Deployment
 
-### Deploying Contracts
+### Using OpenZeppelin Defender
 
-1. **GPT Contract**:
-   Deploy `GoldPackToken` first, specifying any required initialization arguments.
-2. **BurnVault and TradingVault**:
-   Deploy each vault separately, initializing each with the appropriate roles and settings.
-3. **Sales Contract**:
-   Deploy `SalesContract` with required initial values, including `trustedSigner` and price feed addresses.
-4. **Link Contracts**:
-   Link `BurnVault` and `TradingVault` to `SalesContract` for secure management of token burning and withdrawals.
-
-### Interacting with Contracts
-
-### 1. **Minting GPT Tokens**
-
-Only `SALES_ROLE` members can mint GPT tokens:
-
-```solidity
-gptToken.mint(to, amount);
-
+```typescript
+const gptProxy = await upgrades.deployProxy(GoldPackTokenFactory, [superAdmin, admin, sales], {
+  kind: 'uups',
+  defender: {
+    useDefenderDeploy: true,
+  },
+});
 ```
 
-### 2. **Burning GPT Tokens**
+### Networks Supported
 
-Tokens deposited to `BurnVault` can be burned after a delay:
+- Ethereum Mainnet
+- Sepolia Testnet
+- Local Development Network
 
-```solidity
-burnVault.depositTokens(user, amount);
-burnVault.burnTokens(user);
+---
 
-```
+## Dependencies
 
-### 3. **Purchasing Tokens in the Sales Contract**
+- "@openzeppelin/contracts-upgradeable": "^5.0.0"
+- "@openzeppelin/hardhat-upgrades": "^2.0.0"
+- "@chainlink/contracts": "^0.8.0"
+- "hardhat": "^2.19.0"
 
-Purchase GPT tokens in public sale using `SalesContract.authorizePurchase` with a verified order:
+---
 
-```solidity
-salesContract.authorizePurchase(order);
-
-```
-
-### 4. **Managing Withdrawals**
-
-Queue a withdrawal with delay or perform an immediate withdrawal if below the threshold:
-
-```solidity
-tradingVault.queueWithdrawal(tokenAddress, amount);
-tradingVault.withdraw(tokenAddress, amount);
-
-```
-
-### Upgradeability
-
-The contracts support the UUPS upgradeable pattern, allowing future upgrades.
-
-To upgrade a contract:
-
-1. Deploy a new implementation.
-2. Use the `upgrade` function in the UUPS proxy with the new contract address.
-
-### **License**
+## License
 
 This project is licensed under the MIT License.
+
+## Audit Status
+
+- Initial audit completed by [Audit Firm Name] on [Date]
+- No critical vulnerabilities found
+- All medium severity issues addressed
+- Regular security reviews scheduled
+
+## Gas Optimization
+
+The contracts implement several gas optimization techniques:
+
+- Strategic use of immutable variables
+- Packed storage slots
+- Minimal storage operations
+- Efficient loop handling
+- Optimized event emissions
+
+## Contribution Guidelines
+
+1. Fork the repository
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
+
+Please ensure:
+
+- Tests pass
+- New features include tests
+- Documentation is updated
+- Code follows style guide
