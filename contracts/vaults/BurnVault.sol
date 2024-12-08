@@ -10,7 +10,7 @@ import '@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol';
 import '@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20BurnableUpgradeable.sol';
 import '@openzeppelin/contracts/utils/structs/EnumerableSet.sol';
 import {UUPSUpgradeable} from '@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol';
-import './IBurnVault.sol';
+import '../interface/IBurnVault.sol';
 import {Errors} from '../utils/Errors.sol';
 
 /**
