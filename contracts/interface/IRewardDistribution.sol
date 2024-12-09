@@ -49,10 +49,12 @@ interface IRewardDistribution {
 
   /// @notice Struct to hold information about a distribution
   struct Distribution {
-    address rewardToken; // Token used for rewards
-    uint256 totalRewards; // Total rewards in this distribution
-    uint256 distributionTime; // Time when rewards become claimable
-    mapping(address => bool) claimed; // Tracks whether a shareholder has claimed their reward
+    address rewardToken;
+    uint256 totalRewards;
+    uint256 distributionTime;
+    mapping(address => bool) claimed;
+    uint256 totalClaimed; // New field to track claimed rewards
+    bool finalized; // New field to indicate if distribution is finalized
   }
 
   /// @notice Event emitted when shares are allocated to a shareholder
@@ -60,7 +62,7 @@ interface IRewardDistribution {
   /// @notice Event emitted when shares are adjusted for a shareholder
   event SharesAdjusted(address indexed account, uint256 oldShares, uint256 newShares);
   /// @notice Event emitted when rewards are topped up
-  event RewardToppedUp(uint256 amount);
+  event RewardToppedUp(address indexed token, uint256 amount);
   /// @notice Event emitted when rewards are claimed
   event RewardsClaimed(
     address indexed account,
@@ -73,13 +75,15 @@ interface IRewardDistribution {
   /// @notice Event emitted when rewards are unlocked for a shareholder
   event RewardsUnlocked(address indexed account);
   /// @notice Event emitted when rewards are distributed
-  event RewardsDistributed(bytes32 distributionId, uint256 amount);
+  event RewardsDistributed(bytes32 indexed distributionId, address indexed token, uint256 amount);
   /// @notice Event emitted when a shareholder is removed
   event ShareholderRemoved(address indexed account);
   /// @notice Event emitted when a reward token is added
   event RewardTokenAdded(address indexed rewardToken);
   /// @notice Event emitted when a reward token is removed
   event RewardTokenRemoved(address indexed rewardToken);
+  /// @notice Event emitted when a distribution is finalized
+  event DistributionFinalized(bytes32 indexed distributionId);
 
   // Share Management
   /// @notice Sets the number of shares for a shareholder

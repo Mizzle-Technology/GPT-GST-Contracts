@@ -150,6 +150,10 @@ library Errors {
   error RewardsAlreadyClaimed(address account);
   /// @notice Rewards not yet claimable error
   error RewardsNotYetClaimable(bytes32 distributionId);
+  /// @notice Distribution finalized error
+  error DistributionFinalized(bytes32 distributionId);
+  /// @notice Not all rewards claimed error
+  error NotAllRewardsClaimed(bytes32 distributionId);
 
   // LinkedMap errors
   /// @notice Key already exists error

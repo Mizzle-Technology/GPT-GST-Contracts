@@ -56,6 +56,8 @@ contract RewardDistribution is
   mapping(address => bool) public supportTokens;
   /// @notice Distribution ID => Distribution
   mapping(bytes32 => Distribution) public distributions;
+  /// @notice Allocated rewards for each token
+  mapping(address => uint256) public allocatedRewards;
 
   /**
    * @notice Initializes the contract with the provided super and admin addresses.
@@ -69,7 +71,6 @@ contract RewardDistribution is
     if (_super == address(0) || _admin == address(0)) {
       revert Errors.AddressCannotBeZero();
     }
-    __Ownable_init(msg.sender);
     __AccessControl_init();
     __ReentrancyGuard_init();
     __Pausable_init();
@@ -233,7 +234,7 @@ contract RewardDistribution is
     // Transfer reward tokens from the admin to the contract
     ERC20Upgradeable(token).safeTransferFrom(msg.sender, address(this), amount);
 
-    emit RewardToppedUp(amount);
+    emit RewardToppedUp(token, amount);
   }
 
   /**
@@ -252,6 +253,9 @@ contract RewardDistribution is
     if (block.timestamp < distribution.distributionTime) {
       revert Errors.RewardsNotYetClaimable(distributionId);
     }
+    if (distribution.finalized) {
+      revert Errors.DistributionFinalized(distributionId);
+    }
 
     Shareholder storage shareholder = shareholders[msg.sender];
     if (!shareholder.isActivated) {
@@ -266,6 +270,7 @@ contract RewardDistribution is
 
     uint256 rewardAmount = (distribution.totalRewards * shareholder.shares) / SCALE;
     distribution.claimed[msg.sender] = true;
+    distribution.totalClaimed += rewardAmount; // Increment claimed amount
 
     ERC20Upgradeable rewardToken = ERC20Upgradeable(distribution.rewardToken);
     rewardToken.safeTransfer(msg.sender, rewardAmount);
@@ -293,9 +298,14 @@ contract RewardDistribution is
 
     while (currentId != bytes32(0)) {
       Distribution storage distribution = distributions[currentId];
-      if (!distribution.claimed[msg.sender] && block.timestamp >= distribution.distributionTime) {
+      if (
+        !distribution.claimed[msg.sender] &&
+        block.timestamp >= distribution.distributionTime &&
+        !distribution.finalized
+      ) {
         uint256 rewardAmount = (distribution.totalRewards * shareholder.shares) / SCALE;
         distribution.claimed[msg.sender] = true;
+        distribution.totalClaimed += rewardAmount; // Increment claimed amount
 
         ERC20Upgradeable rewardToken = ERC20Upgradeable(distribution.rewardToken);
         rewardToken.safeTransfer(msg.sender, rewardAmount);
@@ -304,6 +314,35 @@ contract RewardDistribution is
       }
       currentId = distributionList.next(currentId);
     }
+  }
+
+  /**
+   * @notice Allows the admin to finalize a distribution.
+   * @param distributionId The ID of the distribution to finalize.
+   *
+   * Requirements:
+   * - Only accounts with ADMIN_ROLE can call.
+   * - The distribution must not already be finalized.
+   * - All rewards must have been claimed.
+   */
+  function finalizeDistribution(bytes32 distributionId) external onlyAdmin {
+    Distribution storage distribution = distributions[distributionId];
+
+    if (distribution.finalized) {
+      revert Errors.DistributionFinalized(distributionId);
+    }
+
+    // Ensure all rewards have been claimed
+    if (distribution.totalClaimed != distribution.totalRewards) {
+      revert Errors.NotAllRewardsClaimed(distributionId);
+    }
+
+    distribution.finalized = true;
+
+    // Optionally remove from the linked list if you don't need the record anymore
+    // distributionList.remove(distributionId);
+
+    emit DistributionFinalized(distributionId);
   }
 
   // === Lock/Unlock Rewards ===
@@ -390,12 +429,21 @@ contract RewardDistribution is
     if (distributionTime <= block.timestamp) {
       revert Errors.InvalidTimeRange(block.timestamp, distributionTime);
     }
+    if (!supportTokens[token]) {
+      revert Errors.TokenNotAccepted(token);
+    }
 
     ERC20Upgradeable rewardToken = ERC20Upgradeable(token);
     uint256 balance = rewardToken.balanceOf(address(this));
-    if (balance < totalRewards) {
-      revert Errors.InsufficientBalance(balance, totalRewards);
+
+    // Check that adding this distribution won't exceed current token balance
+    uint256 newAllocated = allocatedRewards[token] + totalRewards;
+    if (newAllocated > balance) {
+      revert Errors.InsufficientBalance(balance, newAllocated);
     }
+
+    // Update allocated rewards
+    allocatedRewards[token] = newAllocated;
 
     bytes32 distributionId = keccak256(
       abi.encodePacked(totalRewards, distributionTime, block.timestamp)
@@ -405,10 +453,9 @@ contract RewardDistribution is
     distributions[distributionId].distributionTime = distributionTime;
     distributions[distributionId].rewardToken = token;
 
-    // Add distribution to the linked list
     distributionList.add(distributionId);
 
-    emit RewardsDistributed(distributionId, totalRewards);
+    emit RewardsDistributed(distributionId, token, totalRewards);
   }
 
   // === Pause Functions ===

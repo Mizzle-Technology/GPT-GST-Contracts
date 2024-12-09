@@ -749,4 +749,102 @@ describe('RewardDistribution Tests', function () {
         .withArgs(nonAdmin.address);
     });
   });
+
+  describe('Finalize Distribution', () => {
+    let distributionId: string;
+
+    beforeEach(async () => {
+      // Setup
+      await rewardDistribution.connect(admin).addRewardToken(await rewardToken1.getAddress());
+      await rewardToken1.mint(await rewardDistribution.getAddress(), ethers.parseUnits('1000', 18));
+
+      // Create distribution
+      const currentTime = await time.latest();
+      const tx = await rewardDistribution
+        .connect(admin)
+        .createDistribution(
+          await rewardToken1.getAddress(),
+          ethers.parseUnits('1000', 18),
+          currentTime + 100,
+        );
+
+      const receipt = await tx.wait();
+      if (!receipt) {
+        throw new Error('Distribution creation failed');
+      }
+
+      // Get distributionId from event
+      const distributionCreatedEvent = receipt.logs.find(
+        (log) => rewardDistribution.interface.parseLog(log)?.name === 'RewardsDistributed',
+      );
+
+      if (!distributionCreatedEvent) {
+        throw new Error('Distribution creation event not found');
+      }
+
+      const parseLog = rewardDistribution.interface.parseLog(distributionCreatedEvent);
+      distributionId = parseLog?.args[0];
+
+      // Setup shareholders
+      await rewardDistribution
+        .connect(admin)
+        .setShares(shareholder1.address, ethers.parseUnits('0.5', 18));
+      await rewardDistribution
+        .connect(admin)
+        .setShares(shareholder2.address, ethers.parseUnits('0.5', 18));
+    });
+
+    it('should finalize distribution after all rewards claimed', async () => {
+      // Fast-forward time
+      await time.increase(101);
+
+      // Both shareholders claim their rewards
+      await rewardDistribution.connect(shareholder1).claimReward(distributionId);
+      await rewardDistribution.connect(shareholder2).claimReward(distributionId);
+
+      // Finalize distribution
+      await expect(rewardDistribution.connect(admin).finalizeDistribution(distributionId))
+        .to.emit(rewardDistribution, 'DistributionFinalized')
+        .withArgs(distributionId);
+
+      // Verify distribution is finalized
+      const distribution = await rewardDistribution.distributions(distributionId);
+      expect(distribution.finalized).to.be.true;
+    });
+
+    it('should revert when not all rewards are claimed', async () => {
+      // Fast-forward time
+      await time.increase(101);
+
+      // Only one shareholder claims rewards
+      await rewardDistribution.connect(shareholder1).claimReward(distributionId);
+
+      await expect(rewardDistribution.connect(admin).finalizeDistribution(distributionId))
+        .to.be.revertedWithCustomError(rewardDistribution, 'NotAllRewardsClaimed')
+        .withArgs(distributionId);
+    });
+
+    it('should revert when distribution is already finalized', async () => {
+      // Fast-forward time
+      await time.increase(101);
+
+      // Both shareholders claim their rewards
+      await rewardDistribution.connect(shareholder1).claimReward(distributionId);
+      await rewardDistribution.connect(shareholder2).claimReward(distributionId);
+
+      // Finalize distribution
+      await rewardDistribution.connect(admin).finalizeDistribution(distributionId);
+
+      // Try to finalize again
+      await expect(rewardDistribution.connect(admin).finalizeDistribution(distributionId))
+        .to.be.revertedWithCustomError(rewardDistribution, 'DistributionFinalized')
+        .withArgs(distributionId);
+    });
+
+    it('should revert when called by non-admin', async () => {
+      await expect(rewardDistribution.connect(nonAdmin).finalizeDistribution(distributionId))
+        .to.be.revertedWithCustomError(rewardDistribution, 'AdminRoleNotGranted')
+        .withArgs(nonAdmin.address);
+    });
+  });
 });
