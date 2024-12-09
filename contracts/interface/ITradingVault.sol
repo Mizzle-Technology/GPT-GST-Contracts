@@ -46,14 +46,17 @@ interface ITradingVault {
   function unpause() external;
 
   /// @notice Event emitted when a withdrawal request is queued
-  event WithdrawalQueued(
-    bytes32 indexed requestId,
-    address token,
-    uint256 amount,
-    address to,
-    uint256 requestTime,
-    uint256 expiry
-  );
+  struct WithdrawalRequest {
+    address token;
+    uint256 amount;
+    address transfer_to;
+    uint256 expiry;
+    uint256 requestTime;
+    bool executed;
+    bool cancelled;
+    address requestor; // Add this line
+    uint256 nonce; // Add this line
+  }
   /// @notice Event emitted when a withdrawal request is executed
   event WithdrawalExecuted(
     bytes32 indexed requestId,
@@ -76,4 +79,17 @@ interface ITradingVault {
   event WithdrawalThresholdUpdated(uint256 indexed newThreshold);
   /// @notice Event emitted for immediate withdrawals under threshold
   event ImmediateWithdrawal(address indexed token, uint256 amount, address to, uint256 timestamp);
+  /// @notice Event emitted when a withdrawal nonce is updated
+  event WithdrawalNonceUpdated(address indexed account, uint256 nonce);
+  /// @notice Event emitted when a withdrawal request is queued
+  event WithdrawalQueued(
+    bytes32 indexed requestId,
+    address token,
+    uint256 amount,
+    address to,
+    uint256 requestTime,
+    uint256 expiry,
+    address requestor,
+    uint256 nonce
+  );
 }

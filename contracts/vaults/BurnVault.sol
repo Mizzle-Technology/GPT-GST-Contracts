@@ -148,6 +148,7 @@ contract BurnVault is
     }
 
     acceptedTokens.remove(address(_token));
+    emit AcceptedTokenRemoved(address(_token));
   }
 
   /**
