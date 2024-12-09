@@ -847,4 +847,154 @@ describe('RewardDistribution Tests', function () {
         .withArgs(nonAdmin.address);
     });
   });
+
+  describe('Edge Cases', () => {
+    let distributionId1: string;
+    let distributionId2: string;
+
+    beforeEach(async () => {
+      // Setup reward tokens
+      await rewardDistribution.connect(admin).addRewardToken(await rewardToken1.getAddress());
+      await rewardDistribution.connect(admin).addRewardToken(await rewardToken2.getAddress());
+
+      // Mint tokens to contract
+      await rewardToken1.mint(await rewardDistribution.getAddress(), ethers.parseUnits('1000', 18));
+      await rewardToken2.mint(await rewardDistribution.getAddress(), ethers.parseUnits('1000', 18));
+
+      // Create distributions
+      const currentTime = await time.latest();
+
+      // First distribution with token1
+      const tx1 = await rewardDistribution
+        .connect(admin)
+        .createDistribution(
+          await rewardToken1.getAddress(),
+          ethers.parseUnits('500', 18),
+          currentTime + 100,
+        );
+      const receipt1 = await tx1.wait();
+      const event1 = receipt1?.logs.find(
+        (log) => rewardDistribution.interface.parseLog(log)?.name === 'RewardsDistributed',
+      );
+      distributionId1 = rewardDistribution.interface.parseLog(event1!)?.args[0];
+
+      // Second distribution with token2
+      const tx2 = await rewardDistribution
+        .connect(admin)
+        .createDistribution(
+          await rewardToken2.getAddress(),
+          ethers.parseUnits('500', 18),
+          currentTime + 200,
+        );
+      const receipt2 = await tx2.wait();
+      const event2 = receipt2?.logs.find(
+        (log) => rewardDistribution.interface.parseLog(log)?.name === 'RewardsDistributed',
+      );
+      distributionId2 = rewardDistribution.interface.parseLog(event2!)?.args[0];
+
+      // Setup initial shares
+      await rewardDistribution
+        .connect(admin)
+        .setShares(shareholder1.address, ethers.parseUnits('0.5', 18));
+    });
+
+    it('should handle setting shares to zero for active shareholder', async () => {
+      // Verify initial state
+      const [initialShares, , isActivated] = await rewardDistribution.getShareholders(
+        shareholder1.address,
+      );
+      expect(initialShares).to.equal(ethers.parseUnits('0.5', 18));
+      expect(isActivated).to.be.true;
+
+      // Set shares to zero
+      await rewardDistribution.connect(admin).setShares(shareholder1.address, 0);
+
+      // Verify shareholder is deactivated
+      const [finalShares, , isStillActivated] = await rewardDistribution.getShareholders(
+        shareholder1.address,
+      );
+      expect(finalShares).to.equal(0);
+      expect(isStillActivated).to.be.false;
+
+      // Fast forward and try to claim rewards
+      await time.increase(101);
+      await expect(
+        rewardDistribution.connect(shareholder1).claimReward(distributionId1),
+      ).to.be.revertedWithCustomError(rewardDistribution, 'ShareholderNotActivated');
+    });
+
+    it('should handle locking and unlocking rewards mid-distribution', async () => {
+      // Fast forward to distribution time
+      await time.increase(101);
+
+      // Lock rewards
+      await rewardDistribution.connect(admin).lockRewards(shareholder1.address);
+
+      // Try to claim while locked
+      await expect(
+        rewardDistribution.connect(shareholder1).claimReward(distributionId1),
+      ).to.be.revertedWithCustomError(rewardDistribution, 'ShareholderLocked');
+
+      // Unlock rewards
+      await rewardDistribution.connect(admin).unlockRewards(shareholder1.address);
+
+      // Should now be able to claim
+      // Shareholder1 has 50% shares, so they get 50% of the rewards (250 tokens)
+      await expect(rewardDistribution.connect(shareholder1).claimReward(distributionId1))
+        .to.emit(rewardDistribution, 'RewardsClaimed')
+        .withArgs(
+          shareholder1.address,
+          ethers.parseUnits('250', 18), // Changed from 500 to 250
+          await rewardToken1.getAddress(),
+          distributionId1,
+        );
+    });
+
+    it('should handle multiple active distributions with different tokens', async () => {
+      await time.increase(201); // Fast forward past both distribution times
+
+      // Claim from first distribution
+      await expect(rewardDistribution.connect(shareholder1).claimReward(distributionId1))
+        .to.emit(rewardDistribution, 'RewardsClaimed')
+        .withArgs(
+          shareholder1.address,
+          ethers.parseUnits('250', 18),
+          await rewardToken1.getAddress(),
+          distributionId1,
+        );
+
+      // Claim from second distribution
+      await expect(rewardDistribution.connect(shareholder1).claimReward(distributionId2))
+        .to.emit(rewardDistribution, 'RewardsClaimed')
+        .withArgs(
+          shareholder1.address,
+          ethers.parseUnits('250', 18),
+          await rewardToken2.getAddress(),
+          distributionId2,
+        );
+
+      // Verify balances
+      expect(await rewardToken1.balanceOf(shareholder1.address)).to.equal(
+        ethers.parseUnits('250', 18),
+      );
+      expect(await rewardToken2.balanceOf(shareholder1.address)).to.equal(
+        ethers.parseUnits('250', 18),
+      );
+    });
+
+    it('should handle claimAllRewards with multiple distributions', async () => {
+      await time.increase(201); // Fast forward past both distribution times
+
+      // Claim all rewards at once
+      await rewardDistribution.connect(shareholder1).claimAllRewards();
+
+      // Verify balances for both tokens
+      expect(await rewardToken1.balanceOf(shareholder1.address)).to.equal(
+        ethers.parseUnits('250', 18),
+      );
+      expect(await rewardToken2.balanceOf(shareholder1.address)).to.equal(
+        ethers.parseUnits('250', 18),
+      );
+    });
+  });
 });
