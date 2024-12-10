@@ -14,7 +14,7 @@ The contracts included:
 
    - UUPS upgradeable pattern
    - Role-based access control (Super Admin, Admin, Sales roles)
-   - Decimal precision: 18
+   - Decimal precision: 6
    - Transfer restrictions during setup
 
 2. **Sales Contract**: Manages the sales of GPT tokens across different sale stages.
