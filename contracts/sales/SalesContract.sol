@@ -18,7 +18,7 @@ import '../tokens/GoldPackToken.sol';
 import '../libs/SalesLib.sol';
 import '../libs/LinkedMap.sol';
 import '../vaults/TradingVault.sol';
-import './ISalesContract.sol';
+import '../interface/ISalesContract.sol';
 import '../utils/Errors.sol';
 
 /**
@@ -79,6 +79,9 @@ contract SalesContract is
   mapping(address => uint256) public nonces;
   /// @notice Round list
   LinkedMap.LinkedList public roundList;
+
+  /// @notice Gap for upgrade safety
+  uint256[50] private __gap;
 
   // === Constructor ===
 

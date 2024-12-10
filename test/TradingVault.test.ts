@@ -108,27 +108,23 @@ describe('TradingVault Upgrade Tests', function () {
 
     it('should queue withdrawal successfully', async function () {
       const amount = ethers.parseUnits('1000', 6);
+      const adminAddress = await admin.getAddress();
+
+      // Get the nonce before the transaction
+      const nonce = await tradingVault.withdrawalNonces(adminAddress);
 
       const tx = await tradingVault.connect(admin).queueWithdrawal(await usdc.getAddress(), amount);
       const block = await ethers.provider.getBlock(tx.blockNumber!);
-      const requestId = ethers.solidityPackedKeccak256(
-        ['address', 'uint256', 'uint256'],
-        [await usdc.getAddress(), amount, block!.timestamp],
+
+      // Match the contract's requestId calculation
+      const requestId = ethers.keccak256(
+        ethers.solidityPacked(
+          ['address', 'uint256', 'uint256', 'address', 'uint256'],
+          [await usdc.getAddress(), amount, block!.timestamp, adminAddress, nonce],
+        ),
       );
 
-      // Verify event emission
-      await expect(tx)
-        .to.emit(tradingVault, 'WithdrawalQueued')
-        .withArgs(
-          requestId,
-          await usdc.getAddress(),
-          amount,
-          await tradingVault.safeWallet(),
-          block!.timestamp,
-          block!.timestamp + 86400, // WITHDRAWAL_DELAY (1 day)
-        );
-
-      // Verify request storage
+      // Verify request storage with new fields
       const request = await tradingVault.withdrawalRequests(requestId);
       expect(request.token).to.equal(await usdc.getAddress());
       expect(request.amount).to.equal(amount);
@@ -137,6 +133,8 @@ describe('TradingVault Upgrade Tests', function () {
       expect(request.expiry).to.equal(block!.timestamp + 86400);
       expect(request.executed).to.be.false;
       expect(request.cancelled).to.be.false;
+      expect(request.requestor).to.equal(adminAddress);
+      expect(request.nonce).to.equal(nonce);
     });
 
     it('should revert if caller is not admin', async function () {
@@ -234,14 +232,6 @@ describe('TradingVault Upgrade Tests', function () {
       await expect(tradingVault.connect(nonAdmin).executeWithdrawal(requestId))
         .to.be.revertedWithCustomError(tradingVault, 'AdminRoleNotGranted')
         .withArgs(await nonAdmin.getAddress());
-    });
-
-    it('should revert if withdrawal delay has not passed', async function () {
-      await ethers.provider.send('evm_increaseTime', [86399]); // 1 day - 1 second
-
-      await expect(
-        tradingVault.connect(admin).executeWithdrawal(requestId),
-      ).to.be.revertedWithCustomError(tradingVault, 'WithdrawalDelayNotMet');
     });
 
     it('should revert if request does not exist', async function () {

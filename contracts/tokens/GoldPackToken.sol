@@ -12,7 +12,7 @@ import '@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol';
 import '@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol';
 
 // Local imports
-import './IGoldPackToken.sol';
+import '../interface/IGoldPackToken.sol';
 import '../utils/Errors.sol';
 
 /**

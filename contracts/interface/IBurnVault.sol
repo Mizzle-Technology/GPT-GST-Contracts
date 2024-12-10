@@ -52,4 +52,6 @@ interface IBurnVault {
   event TokensBurned(address indexed account, uint256 amount);
   /// @notice Accepted token added event
   event AcceptedTokenAdded(address indexed token);
+  /// @notice Accepted token removed event
+  event AcceptedTokenRemoved(address indexed token);
 }

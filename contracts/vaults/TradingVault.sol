@@ -8,7 +8,7 @@ import '@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol';
 import '@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol';
 import '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
 import '@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol';
-import './ITradingVault.sol';
+import '../interface/ITradingVault.sol';
 import {Errors} from '../utils/Errors.sol';
 /**
  * @title TradingVault
@@ -50,23 +50,15 @@ contract TradingVault is
   /// @notice Storage gap
   uint256[50] private __gap;
 
-  /// @notice Withdrawal request struct
-  struct WithdrawalRequest {
-    address token;
-    uint256 amount;
-    address transfer_to;
-    uint256 expiry;
-    uint256 requestTime;
-    bool executed;
-    bool cancelled;
-  }
-
   /// @notice Withdrawal wallet
   address public safeWallet;
   /// @notice Withdrawal threshold
   uint256 public WITHDRAWAL_THRESHOLD; // 100k USDC
   /// @notice Withdrawal requests mapping
   mapping(bytes32 => WithdrawalRequest) public withdrawalRequests;
+
+  /// @notice Add nonce mapping
+  mapping(address => uint256) public withdrawalNonces;
 
   /**
    * @notice Initializes the TradingVault contract
@@ -129,7 +121,10 @@ contract TradingVault is
     address token,
     uint256 amount
   ) external override onlyAdmin whenNotPaused nonReentrant returns (bytes32) {
-    bytes32 requestId = keccak256(abi.encodePacked(token, amount, block.timestamp));
+    uint256 nonce = withdrawalNonces[msg.sender]++;
+    bytes32 requestId = keccak256(
+      abi.encodePacked(token, amount, block.timestamp, msg.sender, nonce)
+    );
 
     if (withdrawalRequests[requestId].amount > 0) {
       revert Errors.DuplicatedWithdrawalRequest(requestId);
@@ -154,7 +149,9 @@ contract TradingVault is
       requestTime: block.timestamp,
       expiry: block.timestamp + WITHDRAWAL_DELAY,
       executed: false,
-      cancelled: false
+      cancelled: false,
+      requestor: msg.sender,
+      nonce: nonce
     });
 
     emit WithdrawalQueued(
@@ -163,8 +160,12 @@ contract TradingVault is
       amount,
       safeWallet,
       block.timestamp,
-      block.timestamp + WITHDRAWAL_DELAY
+      block.timestamp + WITHDRAWAL_DELAY,
+      msg.sender,
+      nonce
     );
+
+    emit WithdrawalNonceUpdated(msg.sender, nonce);
 
     return requestId;
   }
@@ -243,10 +244,6 @@ contract TradingVault is
 
     if (request.cancelled) {
       revert Errors.WithdrawalAlreadyCancelled(requestId);
-    }
-
-    if (block.timestamp < request.requestTime + WITHDRAWAL_DELAY) {
-      revert Errors.WithdrawalDelayNotMet(requestId);
     }
 
     request.cancelled = true;
