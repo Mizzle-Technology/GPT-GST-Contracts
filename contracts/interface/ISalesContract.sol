@@ -106,12 +106,24 @@ interface ISalesContract {
   // === View Functions ===
   /// @notice Returns the sale stage for a round
   function RoundStage(bytes32 roundId) external view returns (SaleStage);
+  /// @notice Returns the GPT amount required for a given payment token amount
+  function queryGptAmount(
+    uint256 paymentTokenAmount,
+    address paymentToken
+  ) external view returns (uint256);
+  /// @notice Returns the payment token amount required for a given GPT token amount
+  function queryPaymentTokenAmount(
+    uint256 gptAmount,
+    address paymentToken
+  ) external view returns (uint256);
 
   // === Emergency Functions ===
   /// @notice Pauses the contract
   function pause() external;
   /// @notice Unpauses the contract
   function unpause() external;
+  /// @notice Updates the trusted signer
+  function updateTrustedSigner(address _newSigner) external;
 
   // === Recovery Functions ===
   /// @notice Recovers ERC20 tokens

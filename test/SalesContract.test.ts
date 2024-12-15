@@ -9,6 +9,7 @@ import {
   MockERC20,
   MockAggregator,
 } from '../typechain-types';
+import { Wallet } from 'ethers';
 
 enum SaleStage {
   PreMarketing,
@@ -147,6 +148,84 @@ describe('SalesContract Tests', function () {
       ethers.ZeroAddress,
     );
     expect(await salesContract.trustedSigner()).to.equal(relayer.address);
+  });
+
+  describe('Relayer Signature', async () => {
+    it('should update trusted signer correctly', async function () {
+      // set a specific relayer
+      const relayerPrivateKey =
+        '0x72ed06be8eeb542009a55a828f3baffb50252e26774985e93d5abd9f31c216c5';
+      const relayerWallet = new ethers.Wallet(relayerPrivateKey, ethers.provider);
+      const relayerAddress = await relayerWallet.getAddress();
+
+      // pause the contract before updating the trusted signer
+      await salesContract.connect(superAdmin).pause();
+
+      // update the trusted signer
+      await salesContract.connect(superAdmin).updateTrustedSigner(relayerAddress);
+
+      // unpause the contract
+      await salesContract.connect(superAdmin).unpause();
+
+      expect(await salesContract.trustedSigner()).to.equal(relayerAddress);
+
+      // create round
+      const currentTime = await time.latest();
+      const createdRoundTx = await salesContract
+        .connect(sales)
+        .createRound(
+          ethers.parseUnits('100000', GPT_DECIMALS),
+          currentTime,
+          currentTime + 24 * 60 * 60,
+        );
+      const receipt = await createdRoundTx.wait();
+      if (!receipt) {
+        throw new Error('Round creation failed');
+      }
+      const roundCreatedEvent = receipt.logs.find(
+        (log) => salesContract.interface.parseLog(log)?.name === 'RoundCreated',
+      );
+      if (!roundCreatedEvent) {
+        throw new Error('Round creation event not found');
+      }
+      const parseLog = salesContract.interface.parseLog(roundCreatedEvent);
+      const roundId = parseLog?.args[0];
+
+      // Add these lines to mint and approve USDC
+      await usdc.mint(user.address, ethers.parseUnits('2000', USDC_DECIMALS));
+      await usdc
+        .connect(user)
+        .approve(await salesContract.getAddress(), ethers.parseUnits('2000', USDC_DECIMALS));
+
+      // create order
+      const order = {
+        roundId: roundId,
+        buyer: user.address,
+        gptAmount: ethers.parseUnits('10000', GPT_DECIMALS),
+        nonce: await salesContract.nonces(user.address),
+        expiry: currentTime + 5 * 60,
+        paymentToken: await usdc.getAddress(),
+      };
+      console.log('Order:', order);
+
+      const userSignature = await getUserDigest(salesContract, user, order);
+      const relayerSignature = await getUserDigest(salesContract, relayerWallet, order);
+      console.log('Relayer Signature:', relayerSignature);
+
+      // set the round to public sale
+      await salesContract.connect(sales).setSaleStage(SaleStage.PublicSale, roundId);
+
+      await salesContract.connect(user).authorizePurchase({
+        ...order,
+        userSignature,
+        relayerSignature,
+      });
+
+      // verify the purchase was successful
+      expect(await gptToken.balanceOf(user.address)).to.equal(order.gptAmount);
+      expect(await usdc.balanceOf(user.address)).to.equal(0);
+      expect(await salesContract.nonces(user.address)).to.equal(1);
+    });
   });
 
   describe('Authorize Purchase', async () => {
@@ -1290,7 +1369,11 @@ describe('SalesContract Tests', function () {
 });
 
 // Helper functions
-async function getUserDigest(salesContract: SalesContract, signer: SignerWithAddress, order: any) {
+async function getUserDigest(
+  salesContract: SalesContract,
+  signer: SignerWithAddress | Wallet,
+  order: any,
+) {
   const domain = {
     name: 'GoldPack Token Sales',
     version: '1',
