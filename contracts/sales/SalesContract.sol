@@ -470,6 +470,27 @@ contract SalesContract is
     emit Unpaused(msg.sender, block.timestamp);
   }
 
+  /**
+   * @notice Updates the trusted signer address used for signature verification
+   * @dev Only callable by admin when contract is paused
+   * @param _newSigner The new signer address to set
+   * @dev Emits a TrustedSignerUpdated event
+   * Requirements:
+   * - Caller must have admin role
+   * - Contract must be paused
+   * - New signer address cannot be zero
+   */
+  function updateTrustedSigner(address _newSigner) external override whenPaused onlyDefaultAdmin {
+    if (_newSigner == address(0)) {
+      revert Errors.AddressCannotBeZero();
+    }
+
+    address oldSigner = trustedSigner;
+    trustedSigner = _newSigner;
+
+    emit TrustedSignerUpdated(oldSigner, _newSigner);
+  }
+
   // === Recovery Functions ===
   /**
    * @notice Recovers stuck ERC20 tokens from the contract
@@ -551,7 +572,7 @@ contract SalesContract is
   function queryGptAmount(
     uint256 paymentTokenAmount,
     address paymentToken
-  ) public view returns (uint256) {
+  ) public view override returns (uint256) {
     if (paymentTokenAmount <= 0) {
       revert Errors.InvalidAmount(paymentTokenAmount);
     }
@@ -583,7 +604,7 @@ contract SalesContract is
   function queryPaymentTokenAmount(
     uint256 gptAmount,
     address paymentToken
-  ) public view returns (uint256) {
+  ) external view override returns (uint256) {
     if (gptAmount <= 0) {
       revert Errors.InvalidAmount(gptAmount);
     }
